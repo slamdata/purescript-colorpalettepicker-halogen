@@ -22,6 +22,7 @@
   "dependencies": {
     "purescript-halogen": "^2.0.1",
     "purescript-halogen-css": "^6.0.0",
-    "purescript-css": "^3.0.0"
+    "purescript-css": "^3.0.0",
+    "purescript-colorpicker-halogen": "git://github.com/safareli/purescript-colorpicker-halogen#init"
   }
 }

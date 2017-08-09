@@ -3,6 +3,7 @@ module Main where
 import Prelude
 
 import ColorPalettePicker.Halogen.Component as CPP
+import Control.Monad.Aff.Class (class MonadAff)
 import Control.Monad.Eff (Eff)
 import Data.Either.Nested as Either
 import Data.Functor.Coproduct.Nested as Coproduct
@@ -35,7 +36,7 @@ type HTML m = H.ParentHTML Query ChildQuery Slot m
 type DSL m = H.ParentDSL State Query ChildQuery Slot Void m
 
 
-example ∷ ∀ m. H.Component HH.HTML Query Unit Void m
+example ∷ ∀ m r. MonadAff (CPP.PickerEffects r) m => H.Component HH.HTML Query Unit Void m
 example = H.parentComponent
     { initialState: const {}
     , render
@@ -43,7 +44,7 @@ example = H.parentComponent
     , receiver: const Nothing
     }
 
-render ∷ ∀ m. State → HTML m
+render ∷ ∀ m r. MonadAff (CPP.PickerEffects r) m => State → HTML m
 render _ = HH.div_
   [ HH.h1_ [ HH.text "input 1" ]
   , HH.slot' cpString 0 (CPP.input) unit (HE.input Query)

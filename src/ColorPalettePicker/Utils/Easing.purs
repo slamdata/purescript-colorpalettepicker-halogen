@@ -26,3 +26,10 @@ linear start end progress = progress * (end - start) + start
 
 lineTo :: Easing
 lineTo = linear
+
+mix :: Number -> Progresion -> Number -> Progresion
+mix fraction progression num p = interpolate fraction (progression p) num
+  where
+  -- | Linearly interpolate between two values.
+  interpolate :: Number -> Number -> Number -> Number
+  interpolate fraction a b = a + fraction * (b - a)
