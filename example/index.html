@@ -9,35 +9,22 @@ body {
   margin: auto;
 }
 
-.paletteSet {
-  display: flex;
-  flex-wrap: wrap;
+
+.Picker-paletteList {
+  width: 500px
+  /*display: flex;
+  flex-wrap: wrap;*/
 }
-.paletteGroup {
+.Picker-palette {
   flex: 1 1 50%;
   /*flex: 1 1 25%;*/
-}
-.palette {
   display: flex;
 }
-.palette > * {
+.Picker-paletteColor {
   flex: 1 1 0;
   font-size: 1px;
   line-height: 20px;
 }
-
-.palette-original {
-  display: none;
-}
-
-.paletteGroup:hover .palette-original {
-  display: flex;
-}
-
-.paletteGroup:hover .palette-dinamic {
-  display: none;
-}
-
 
 
 .ColorPicker {
