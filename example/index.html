@@ -9,35 +9,43 @@ body {
   margin: auto;
 }
 
-
-.Picker-paletteList {
+.ColorSchemePicker {
   width: 500px
-  /*display: flex;
-  flex-wrap: wrap;*/
 }
-.Picker-palette {
-  flex: 1 1 50%;
-  /*flex: 1 1 25%;*/
+
+.ColorPalettePicker-paletteGroupHeader {
+  padding: 1em 0.5em 0.5em;
+}
+
+.ColorPalettePicker-paletteGroupItems {
+  max-height: 140px;
+  overflow-y: scroll;
+}
+
+.ColorPalettePicker-paletteGroupItem + .ColorPalettePicker-paletteGroupItem{
+  border-top: 1px hsl(0, 0%, 0%) solid;
+}
+
+.ColorPalettePicker-paletteGroupItem {
   display: flex;
 }
 .Picker-paletteColor {
   flex: 1 1 0;
-  font-size: 1px;
-  line-height: 20px;
+  height: 20px;
 }
 
 
 .ColorPicker {
   padding: 0.5em;
-  display: inline-flex;
+  display: flex;
   background: hsl(0, 0%, 80%);
 }
 
-.ColorPicker--small .ColorPicker-field  { width: 10em; height: 10em; }
-.ColorPicker--small .ColorPicker-slider { width: 1em;  }
-
-.ColorPicker--large .ColorPicker-field  { width: 15em; height: 15em; }
-.ColorPicker--large .ColorPicker-slider { width: 1.5em;}
+/* TODO remove important. it's added for safari which has correct behaviour to not stratch element
+but chrome stretches it need to set some flex prop to fix it.
+*/
+.ColorPicker-field  { width: 250px; height: 250px !important; }
+.ColorPicker-slider { width: 20px;}
 
 .ColorPicker-dragger {
   user-select: none;

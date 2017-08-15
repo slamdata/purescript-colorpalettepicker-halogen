@@ -5,7 +5,8 @@ import Prelude
 import Data.List (List(..), fromFoldable, (:))
 
 type Progresion = Number -> Number
-type Easing = Number -> Number -> Progresion
+type Generator = Number -> Progresion
+type Easing = Number -> Generator
 
 type ProgressionPoint = { at :: Number, val :: Number }
 
@@ -27,9 +28,9 @@ linear start end progress = progress * (end - start) + start
 lineTo :: Easing
 lineTo = linear
 
-mix :: Number -> Progresion -> Number -> Progresion
+mix :: Number -> Progresion -> Generator
 mix fraction progression num p = interpolate fraction (progression p) num
-  where
+
   -- | Linearly interpolate between two values.
-  interpolate :: Number -> Number -> Number -> Number
-  interpolate fraction a b = a + fraction * (b - a)
+interpolate :: Number -> Number -> Number -> Number
+interpolate fraction a b = a + fraction * (b - a)
