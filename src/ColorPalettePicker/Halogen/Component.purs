@@ -27,22 +27,15 @@ import Prelude
 import CSS as CSS
 import Color (Color)
 import Color as Color
-import Color.Scale as Scale
-import ColorPalettePicker.Utils.Easing (quadratic)
-import ColorPalettePicker.Utils.Palettes (divergingPalettes,
-  , sequentialPalettes)
-import ColorPalettePicker.Utils.PreScale (PreScale, colorStop, combineScale, mkScale, reverseScale)
+import ColorPalettePicker.Utils.Palettes (PaletteGenerator, mkPalette, runPalette, toCSSGradient, divergingPaletteGenerator, qualitativePaletteGenerator, sequentialPaletteGenerator)
 import ColorPicker.Halogen.ColorComponents as CPickerComponents
 import ColorPicker.Halogen.Component as CPicker
 import Control.Monad.Aff.Class (class MonadAff)
-import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
+import Control.Plus (empty)
 import Data.Either.Nested as Either
-import Data.Foldable (foldr)
 import Data.Functor.Coproduct.Nested as Coproduct
-import Data.List (List(..), (:))
-import Data.List as List
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Tuple (Tuple(..))
 import Halogen as H
 import Halogen.Component.ChildPath as CP
@@ -50,7 +43,6 @@ import Halogen.HTML as HH
 import Halogen.HTML.CSS as HCSS
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Math (abs, sqrt, (%))
 
 
 type State = {
@@ -119,9 +111,9 @@ render state = HH.div [HP.class_ $ HH.ClassName $ "ColorSchemePicker"] $
   ]
   where
   paletteGroupes = map renderGroup
-    [ sequentialPaletes
-    , divergingPaletes
-    , qualitativePaletes
+    [ sequentialPaletteGroup
+    , divergingPaletteGroup
+    , qualitativePaletteGroup
     ]
   renderGroup { name, generators } =
     HH.div
@@ -131,22 +123,25 @@ render state = HH.div [HP.class_ $ HH.ClassName $ "ColorSchemePicker"] $
         [ HH.text $ name <> " Palette" ]
       , HH.div
         [ HP.class_ $ H.ClassName "ColorPalettePicker-paletteGroupItems" ]
-        $ generators <#> \gen ->
+        $ generators <#> \generator ->
           HH.div
           [ HP.class_ $ HH.ClassName $ "ColorPalettePicker-paletteGroupItem"]
-          (renderColors $ gen state.color $ 9)
+          (renderPalette (mkPalette generator state.color))
       ]
-  renderColors colors =
-    [ HH.div [HP.class_ $ HH.ClassName $ "Picker-paletteColors" ]
-      $ colors <#> \color -> HH.div
+  renderPalette palette =
+    [ HH.div [HP.class_ $ HH.ClassName $ "Picker-palette" ]
+      $ runPalette palette 9 <#> \color -> HH.div
         [ HCSS.style $ CSS.backgroundColor color
         , HP.class_ $ HH.ClassName $ "Picker-paletteColor"
         ] []
-    , HH.div
-        [ HP.class_ $ HH.ClassName $ "Picker-paletteGradient"
-        , HCSS.style $ CSS.backgroundImage $ CSS.fromString $ "linear-gradient(to right, "<> intercalate ", " (map Color.cssStringHSLA colors) <>")"
-        ] []
-    ]
+    ] <> gradient
+    where
+    toAlt = maybe empty pure
+    gradient = toAlt $ toCSSGradient palette <#> \img -> HH.div
+      [ HP.class_ $ HH.ClassName $ "Picker-paletteGradient"
+      , HCSS.style $ CSS.backgroundImage img
+      ] []
+
 
 eval ∷ ∀ m . Query ~> DSL m
 eval = case _ of
@@ -157,22 +152,23 @@ eval = case _ of
       CPicker.NotifyChange color -> H.put {color}
     pure next
 
+
 type PaletteGroup = { name ∷ String, generators ∷ Array PaletteGenerator }
-sequentialPaletes :: PaletteGroup
-sequentialPaletes =
+
+sequentialPaletteGroup :: PaletteGroup
+sequentialPaletteGroup =
   { name: "Sequential"
-  , generators: sequentialPalettes
+  , generators: sequentialPaletteGenerator
   }
 
-divergingPaletes :: PaletteGroup
-divergingPaletes =
+divergingPaletteGroup :: PaletteGroup
+divergingPaletteGroup =
   { name: "Diverging"
-  , generators: divergingPalettes
+  , generators: divergingPaletteGenerator
   }
 
-qualitativePaletes :: PaletteGroup
-qualitativePaletes =
+qualitativePaletteGroup :: PaletteGroup
+qualitativePaletteGroup =
   { name: "Qualitative"
-  , generators:
-
+  , generators: qualitativePaletteGenerator
   }

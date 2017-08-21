@@ -1,126 +1,209 @@
 module ColorPalettePicker.Utils.Palettes
-  ( sequentialPalettes
-  , divergingPalettes
-  , qualitativePalettes
-  , PaletteGenerator
+  ( divergingPaletteGenerator
+  , qualitativePaletteGenerator
+  , sequentialPaletteGenerator
+
+  , PaletteGenerator(..)
+  , SequentialGeneratorSpec
+  , DivergingGeneratorSpec
+  , QualitativeGeneratorSpec
+  , ColorHSL
+
+  , Palette
+  , runPalette
+  , mkPalette
+
+  , toCSSGradient
   ) where
 
 import Prelude
 
+import CSS as CSS
 import Color (Color)
 import Color as Color
 import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (quadratic)
 import ColorPalettePicker.Utils.PreScale (PreScale, colorStop, combineScale, mkScale, reverseScale)
-import Data.Array (fromFoldable, reverse, sortBy, take)
+import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
 import Data.Foldable (foldr)
 import Data.List (List(..), (:))
 import Data.List as List
+import Data.Maybe (Maybe(..))
 import Math (abs, sqrt, (%))
 
+type Palette = { generator :: PaletteGenerator, seed :: Color }
 
-type PaletteGenerator = Color -> Int -> Array Color
+toCSSGradient :: Palette -> Maybe CSS.BackgroundImage
+toCSSGradient { generator, seed } = case generator of
+  SequentialGenerator spec -> Just $ mkGradient $ runSequentialGeneratorSpec spec seed 5
+  DivergingGenerator spec -> Just $ mkGradient $ runDivergingGeneratorSpec spec seed 10
+  QualitativeGenerator spec -> Nothing
+  where
+  mkGradient colors = CSS.fromString
+    $ "linear-gradient(to right, " <> intercalate ", " (map Color.cssStringHSLA colors) <> ")"
 
-sequentialPalettes :: Array PaletteGenerator
-sequentialPalettes = map
-  (mkSequentialPalette >>> preScaleToGenerator)
+
+data PaletteGenerator
+  = SequentialGenerator SequentialGeneratorSpec
+  | DivergingGenerator DivergingGeneratorSpec
+  | QualitativeGenerator QualitativeGeneratorSpec
+
+derive instance paletteGeneratorEq :: Eq PaletteGenerator
+derive instance paletteGeneratorOrd :: Ord PaletteGenerator
+
+type SequentialGeneratorSpec =
+  { hueShift :: Number }
+
+type DivergingGeneratorSpec =
+  { sequentialGenerator :: SequentialGeneratorSpec
+  , startColorHueShift :: Number
+  }
+
+type QualitativeGeneratorSpec =
+  { colors :: Array ColorHSL }
+
+type PaletteRunner = Color -> Int -> Array Color
+
+newtype ColorHSL = ColorHSL { h :: Number, s :: Number, l :: Number }
+
+derive instance colorHSLEq :: Eq ColorHSL
+derive instance colorHSLOrd :: Ord ColorHSL
+
+
+mkPalette :: PaletteGenerator -> Color -> Palette
+mkPalette = { generator: _, seed: _ }
+
+runPalette :: Palette -> Int -> Array Color
+runPalette { generator, seed } = seed # case generator of
+    SequentialGenerator spec -> runSequentialGeneratorSpec spec
+    DivergingGenerator spec -> runDivergingGeneratorSpec spec
+    QualitativeGenerator spec -> runQualitativeGeneratorSpec spec
+
+sequentialPaletteGenerator :: Array PaletteGenerator
+sequentialPaletteGenerator = map
+  ({hueShift: _} >>> SequentialGenerator)
   (hueShifts [ 0.0 ] [ 30.0, 60.0, 90.0, 120.0 ])
   where
   hueShifts :: Array Number -> Array Number -> Array Number
   hueShifts mid hues = reverse hues <> mid <> map (_ * -1.0) hues
 
-divergingPalettes :: Array PaletteGenerator
-divergingPalettes = map preScaleToGenerator do
+divergingPaletteGenerator :: Array PaletteGenerator
+divergingPaletteGenerator = do
   hueShift <- [45.0, 25.0, 0.0, -25.0, -45.0]
   secondaryHueShift <- [ -135.0, -90.0, 90.0, 135.0, 180.0]
-  pure \color ->
-    let
-      hsl = Color.toHSLA color
-      secondaryColor = Color.hsla (secondaryHueShift + hsl.h) hsl.s hsl.l hsl.a
-      start = reverseScale $ mkSequentialPalette hueShift secondaryColor
-      end = mkSequentialPalette hueShift color
-    in start `combineScale 0.5` end
+  pure $ DivergingGenerator
+    { sequentialGenerator: { hueShift }
+    , startColorHueShift: secondaryHueShift
+    }
 
-qualitativePalettes :: Array PaletteGenerator
-qualitativePalettes = map mkGenerator palettes
-  where
-  palettes =
-    [ [ { h: 0.0, s: 0.0, l: 0.4 }
-      , { h: 24.29, s: 0.785, l: 0.4196 }
-      , { h: 29.24, s: 0.9675, l: 0.7588 }
-      , { h: 60.0, s: 1.0, l: 0.8 }
-      , { h: 120.0, s: 0.4066, l: 0.6431 }
-      , { h: 214.0, s: 0.5172, l: 0.4549 }
-      , { h: 265.26, s: 0.3065, l: 0.7569 }
-      , { h: 328.49, s: 0.9835, l: 0.4745} ]
-    , [ { h: 0.0, s: 0.0, l: 0.4 }
-      , { h: 25.95, s: 0.9817, l: 0.4294 }
-      , { h: 38.98, s: 0.7026, l: 0.3824 }
-      , { h: 44.47, s: 0.9828, l: 0.4549 }
-      , { h: 88.24, s: 0.6939, l: 0.3843 }
-      , { h: 162.14, s: 0.7081, l: 0.3627 }
-      , { h: 244.48, s: 0.3059, l: 0.5706 }
-      , { h: 329.37, s: 0.7983, l: 0.5333} ]
-    , [ { h: 0.61, s: 0.9245, l: 0.7922 }
-      , { h: 21.46, s: 0.6313, l: 0.4255 }
-      , { h: 29.88, s: 1.0, l: 0.5 }
-      , { h: 33.8, s: 0.9726, l: 0.7137 }
-      , { h: 60.0, s: 1.0, l: 0.8 }
-      , { h: 91.76, s: 0.5705, l: 0.7078 }
-      , { h: 116.38, s: 0.5686, l: 0.4 }
-      , { h: 200.66, s: 0.5214, l: 0.7706 }
-      , { h: 204.16, s: 0.7062, l: 0.4137 }
-      , { h: 269.03, s: 0.4326, l: 0.4216 }
-      , { h: 280.0, s: 0.3051, l: 0.7686 }
-      , { h: 359.4, s: 0.7945, l: 0.4961} ]
-    , [ { h: 0.0, s: 0.0, l: 0.949 }
-      , { h: 4.68, s: 0.9059, l: 0.8333 }
-      , { h: 34.77, s: 0.9778, l: 0.8235 }
-      , { h: 40.5, s: 0.4348, l: 0.8196 }
-      , { h: 60.0, s: 1.0, l: 0.9 }
-      , { h: 108.95, s: 0.4872, l: 0.8471 }
-      , { h: 207.5, s: 0.4615, l: 0.7961 }
-      , { h: 285.6, s: 0.3165, l: 0.8451 }
-      , { h: 329.14, s: 0.8974, l: 0.9235} ]
-    , [ { h: 0.0, s: 0.0, l: 0.8 }
-      , { h: 24.44, s: 0.9529, l: 0.8333 }
-      , { h: 35.68, s: 0.5692, l: 0.8725 }
-      , { h: 50.37, s: 1.0, l: 0.8412 }
-      , { h: 80.45, s: 0.6875, l: 0.8745 }
-      , { h: 153.19, s: 0.4476, l: 0.7941 }
-      , { h: 219.31, s: 0.3867, l: 0.8529 }
-      , { h: 322.86, s: 0.6563, l: 0.8745} ]
-    , [ { h: 0.0, s: 0.0, l: 0.6 }
-      , { h: 21.9, s: 0.6117, l: 0.4039 }
-      , { h: 29.88, s: 1.0, l: 0.5 }
-      , { h: 60.0, s: 1.0, l: 0.6 }
-      , { h: 118.22, s: 0.4056, l: 0.4882 }
-      , { h: 206.98, s: 0.5397, l: 0.4686 }
-      , { h: 292.24, s: 0.3527, l: 0.4725 }
-      , { h: 328.47, s: 0.8806, l: 0.7373 }
-      , { h: 359.41, s: 0.7953, l: 0.498} ]
-    , [ { h: 0.0, s: 0.0, l: 0.702 }
-      , { h: 16.75, s: 0.9625, l: 0.6863 }
-      , { h: 35.56, s: 0.609, l: 0.7392 }
-      , { h: 49.04, s: 1.0, l: 0.5922 }
-      , { h: 82.73, s: 0.6286, l: 0.5882 }
-      , { h: 161.09, s: 0.4299, l: 0.5804 }
-      , { h: 221.61, s: 0.3735, l: 0.6745 }
-      , { h: 323.23, s: 0.6596, l: 0.7235} ]
-    , [ { h: 0.0, s: 0.0, l: 0.851 }
-      , { h: 6.13, s: 0.9448, l: 0.7157 }
-      , { h: 31.74, s: 0.9748, l: 0.6882 }
-      , { h: 52.5, s: 1.0, l: 0.7176 }
-      , { h: 60.0, s: 1.0, l: 0.851 }
-      , { h: 82.05, s: 0.6393, l: 0.6412 }
-      , { h: 108.95, s: 0.4872, l: 0.8471 }
-      , { h: 169.71, s: 0.443, l: 0.6902 }
-      , { h: 204.58, s: 0.4854, l: 0.6647 }
-      , { h: 247.5, s: 0.3019, l: 0.7922 }
-      , { h: 299.02, s: 0.3161, l: 0.6216 }
-      , { h: 329.36, s: 0.8868, l: 0.8961}
-      ]
+qualitativePaletteGenerator :: Array PaletteGenerator
+qualitativePaletteGenerator = map
+  ({colors: _} >>> QualitativeGenerator)
+  [ [ hsl 0.0     0.0     0.4
+    , hsl 24.29   0.785   0.4196
+    , hsl 29.24   0.9675  0.7588
+    , hsl 60.0    1.0     0.8
+    , hsl 120.0   0.4066  0.6431
+    , hsl 214.0   0.5172  0.4549
+    , hsl 265.26  0.3065  0.7569
+    , hsl 328.49  0.9835  0.4745
     ]
+  , [ hsl 0.0     0.0     0.4
+    , hsl 25.95   0.9817  0.4294
+    , hsl 38.98   0.7026  0.3824
+    , hsl 44.47   0.9828  0.4549
+    , hsl 88.24   0.6939  0.3843
+    , hsl 162.14  0.7081  0.3627
+    , hsl 244.48  0.3059  0.5706
+    , hsl 329.37  0.7983  0.5333
+    ]
+  , [ hsl 0.61    0.9245  0.7922
+    , hsl 21.46   0.6313  0.4255
+    , hsl 29.88   1.0     0.5
+    , hsl 33.8    0.9726  0.7137
+    , hsl 60.0    1.0     0.8
+    , hsl 91.76   0.5705  0.7078
+    , hsl 116.38  0.5686  0.4
+    , hsl 200.66  0.5214  0.7706
+    , hsl 204.16  0.7062  0.4137
+    , hsl 269.03  0.4326  0.4216
+    , hsl 280.0   0.3051  0.7686
+    , hsl 359.4   0.7945  0.4961
+    ]
+  , [ hsl 0.0     0.0     0.949
+    , hsl 4.68    0.9059  0.8333
+    , hsl 34.77   0.9778  0.8235
+    , hsl 40.5    0.4348  0.8196
+    , hsl 60.0    1.0     0.9
+    , hsl 108.95  0.4872  0.8471
+    , hsl 207.5   0.4615  0.7961
+    , hsl 285.6   0.3165  0.8451
+    , hsl 329.14  0.8974  0.9235
+    ]
+  , [ hsl 0.0     0.0     0.8
+    , hsl 24.44   0.9529  0.8333
+    , hsl 35.68   0.5692  0.8725
+    , hsl 50.37   1.0     0.8412
+    , hsl 80.45   0.6875  0.8745
+    , hsl 153.19  0.4476  0.7941
+    , hsl 219.31  0.3867  0.8529
+    , hsl 322.86  0.6563  0.8745
+    ]
+  , [ hsl 0.0     0.0     0.6
+    , hsl 21.9    0.6117  0.4039
+    , hsl 29.88   1.0     0.5
+    , hsl 60.0    1.0     0.6
+    , hsl 118.22  0.4056  0.4882
+    , hsl 206.98  0.5397  0.4686
+    , hsl 292.24  0.3527  0.4725
+    , hsl 328.47  0.8806  0.7373
+    , hsl 359.41  0.7953  0.498
+    ]
+  , [ hsl 0.0     0.0     0.702
+    , hsl 16.75   0.9625  0.6863
+    , hsl 35.56   0.609   0.7392
+    , hsl 49.04   1.0     0.5922
+    , hsl 82.73   0.6286  0.5882
+    , hsl 161.09  0.4299  0.5804
+    , hsl 221.61  0.3735  0.6745
+    , hsl 323.23  0.6596  0.7235
+    ]
+  , [ hsl 0.0     0.0     0.851
+    , hsl 6.13    0.9448  0.7157
+    , hsl 31.74   0.9748  0.6882
+    , hsl 52.5    1.0     0.7176
+    , hsl 60.0    1.0     0.851
+    , hsl 82.05   0.6393  0.6412
+    , hsl 108.95  0.4872  0.8471
+    , hsl 169.71  0.443   0.6902
+    , hsl 204.58  0.4854  0.6647
+    , hsl 247.5   0.3019  0.7922
+    , hsl 299.02  0.3161  0.6216
+    , hsl 329.36  0.8868  0.8961
+    ]
+  ]
+  where
+  hsl h s l = ColorHSL {h, s, l}
+
+
+runQualitativeGeneratorSpec :: QualitativeGeneratorSpec -> PaletteRunner
+runQualitativeGeneratorSpec {colors} seedColor =
+  takeer seedColor $
+    fromFoldable $ foldr foldFunc List.Nil colors
+  where
+  distance start end = abs $ end - start
+  seed = Color.toHSLA seedColor
+  foldFunc (ColorHSL color) rest =
+    let
+      mixed = {h: color.h, s: (color.s + seed.s) / 2.0, l: (color.l + seed.l) / 2.0 }
+    in
+      if hslDistance seed mixed > 10.0 then
+        Cons (Color.hsla mixed.h mixed.s mixed.l 1.0) rest
+      else
+        rest
+  takeer seed arr count = huesort $ take (count - 1) arr <> [seed]
+  huesort = sortBy huesorter
+  huesorter a b =  compare (Color.toHSLA a).h (Color.toHSLA b).h
   -- TODO use Lab for persceptual distance
   hslDistance :: ∀ r z
     . { h :: Number , s :: Number , l :: Number | r }
@@ -140,27 +223,21 @@ qualitativePalettes = map mkGenerator palettes
     b_l = b.l * 100.0
   sqr a = a * a
 
-  mkGenerator palette seedColor =
-    takeer seedColor $
-      fromFoldable $ foldr foldFunc List.Nil palette
-    where
-    distance start end = abs $ end - start
-    seed = Color.toHSLA seedColor
-    foldFunc color@{h, s, l} rest =
-      let mixed = {h, s: (s + seed.s) / 2.0, l: (l + seed.l) / 2.0 }
-      in
-        if hslDistance seed mixed > 10.0 then
-          Cons (Color.hsla mixed.h mixed.s mixed.l 1.0) rest
-        else
-          rest
-  takeer seed arr count = huesort $ take (count - 1) arr <> [seed]
-  huesort = sortBy huesorter
-  huesorter a b =  compare (Color.toHSLA a).h (Color.toHSLA b).h
+runSequentialGeneratorSpec :: SequentialGeneratorSpec -> PaletteRunner
+runSequentialGeneratorSpec spec = preScaleToGenerator $ mkSequentialPalette spec.hueShift
 
+runDivergingGeneratorSpec :: DivergingGeneratorSpec -> PaletteRunner
+runDivergingGeneratorSpec spec = preScaleToGenerator \color ->
+    let
+      hsl = Color.toHSLA color
+      start = reverseScale
+        $ mkSequentialPalette spec.sequentialGenerator.hueShift
+        $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
+      end = mkSequentialPalette spec.sequentialGenerator.hueShift color
+    in start `combineScale 0.5` end
 
-
-preScaleToGenerator :: (Color -> PreScale) -> PaletteGenerator
-preScaleToGenerator f c n =  fromFoldable $ Scale.colors (mkScale Color.Lab $ f c) n
+preScaleToGenerator :: (Color -> PreScale) -> PaletteRunner
+preScaleToGenerator f c n = fromFoldable $ Scale.colors (mkScale Color.Lab $ f c) n
 
 mkSequentialPalette :: Number -> Color -> PreScale
 mkSequentialPalette hueShift inputColor = {start: startColor, stops, end: endColor}
