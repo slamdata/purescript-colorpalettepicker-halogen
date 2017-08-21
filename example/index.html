@@ -26,7 +26,19 @@ body {
   border-top: 1px hsl(0, 0%, 0%) solid;
 }
 
-.ColorPalettePicker-paletteGroupItem {
+.ColorPalettePicker-paletteGroupItem:hover .Picker-paletteColors {
+  display:  none;
+}
+
+.ColorPalettePicker-paletteGroupItem:hover .Picker-paletteGradient {
+  display:  block;
+}
+
+.Picker-paletteGradient {
+  display: none;
+  height: 20px
+}
+.Picker-paletteColors {
   display: flex;
 }
 .Picker-paletteColor {

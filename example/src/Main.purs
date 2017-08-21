@@ -28,8 +28,8 @@ type ChildQuery = Coproduct.Coproduct1 CPP.Query
 type Slot = Either.Either1 Int
 
 
-cpString ∷ CP.ChildPath CPP.Query ChildQuery Int Slot
-cpString = CP.cp1
+cpPicker ∷ CP.ChildPath CPP.Query ChildQuery Int Slot
+cpPicker = CP.cp1
 
 
 type HTML m = H.ParentHTML Query ChildQuery Slot m
@@ -47,7 +47,8 @@ example = H.parentComponent
 render ∷ ∀ m r. MonadAff (CPP.PickerEffects r) m => State → HTML m
 render _ = HH.div_
   [ HH.h1_ [ HH.text "input 1" ]
-  , HH.slot' cpString 0 (CPP.input) unit (HE.input Query)
+  , HH.slot' cpPicker 0 (CPP.input) unit (HE.input Query)
+  , HH.slot' cpPicker 0 (CPP.input) unit (HE.input Query)
   ]
 
 eval ∷ ∀ m. Query ~> DSL m
