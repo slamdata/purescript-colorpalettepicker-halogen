@@ -29,8 +29,8 @@ import CSS as CSS
 import Color (Color)
 import Color as Color
 import ColorPalettePicker.Utils.Palettes (PaletteGenerator, mkPalette, runPalette, toCSSGradient, divergingPaletteGenerator, qualitativePaletteGenerator, sequentialPaletteGenerator)
-import ColorPicker.Halogen.ColorComponents as CPickerComponents
 import ColorPicker.Halogen.Component as CPicker
+import ColorPicker.Halogen.Layout as L
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.MonadZero (guard)
 import Control.Plus (empty)
@@ -55,34 +55,53 @@ type State = {
 
 colorPickerProps ∷ CPicker.Props
 colorPickerProps =
-  { editing:
-      [ [CPickerComponents.componentHue]
-        <> CPickerComponents.componentSV
-        <> CPickerComponents.componentSL
-        <> [CPickerComponents.componentHEX]
-      , CPickerComponents.componentRGB
+  { layout:
+    [ H.ClassName "ColorPicker" ] `L.Root`
+      [ [ H.ClassName "ColorPicker-dragger" ] `L.Group`
+          [ L.Component $ L.componentDragSV
+              { root: [ H.ClassName "ColorPicker-field" ]
+              , isLight: [ H.ClassName "IsLight" ]
+              , isDark: [ H.ClassName "IsDark" ]
+              , selector: [ H.ClassName "ColorPicker-fieldSelector"]
+              }
+          , L.Component $ L.componentDragHue
+              { root: [ H.ClassName "ColorPicker-slider" ]
+              , selector: [ H.ClassName "ColorPicker-sliderSelector"]
+              }
+          ]
+      , [ H.ClassName "ColorPicker-aside" ] `L.Group`
+          [ [ H.ClassName "ColorPicker-stage" ] `L.Group`
+              [ L.Component $ L.componentPreview [ H.ClassName "ColorPicker-colorBlockCurrent" ]
+              , L.Component $ L.componentHistory 4 [ H.ClassName "ColorPicker-colorBlockOld" ]
+              ]
+          , [ H.ClassName "ColorPicker-editing" ] `L.Group`
+              [ [ H.ClassName "ColorPicker-editingItem" ] `L.Group`
+                  [ L.Component $ L.componentHue inputClasses
+                  , L.Component $ L.componentSaturationHSV inputClasses
+                  , L.Component $ L.componentValue inputClasses
+                  , L.Component $ L.componentSaturationHSL inputClasses
+                  , L.Component $ L.componentLightness inputClasses
+                  ]
+              , [ H.ClassName "ColorPicker-editingItem" ] `L.Group`
+                  [ L.Component $ L.componentRed inputClasses
+                  , L.Component $ L.componentGreen inputClasses
+                  , L.Component $ L.componentBlue inputClasses
+                  , L.Component $ L.componentHEX inputClasses
+                  ]
+              ]
+          , [ H.ClassName "ColorPicker-actions" ] `L.Group`
+              [ L.Component $ L.componentSet [ H.ClassName "ColorPicker-actionSet" ] ]
+          ]
       ]
-  , classes: Map.fromFoldable
-    [ Tuple CPicker.Root [HH.ClassName "ColorPicker"]
-    , Tuple CPicker.Dragger [HH.ClassName "ColorPicker-dragger"]
-    , Tuple CPicker.Field [HH.ClassName "ColorPicker-field"]
-    , Tuple CPicker.FieldSelector [HH.ClassName "ColorPicker-fieldSelector"]
-    , Tuple CPicker.Slider [HH.ClassName "ColorPicker-slider"]
-    , Tuple CPicker.SliderSelector [HH.ClassName "ColorPicker-sliderSelector"]
-    , Tuple CPicker.Aside [HH.ClassName "ColorPicker-aside"]
-    , Tuple CPicker.Stage [HH.ClassName "ColorPicker-stage"]
-    , Tuple CPicker.ColorBlockCurrent [HH.ClassName "ColorPicker-colorBlockCurrent"]
-    , Tuple CPicker.ColorBlockNext [HH.ClassName "ColorPicker-colorBlockNext"]
-    , Tuple CPicker.Editing [HH.ClassName "ColorPicker-editing"]
-    , Tuple CPicker.EditingItem [HH.ClassName "ColorPicker-editingItem"]
-    , Tuple CPicker.Input [HH.ClassName "ColorPicker-input"]
-    , Tuple CPicker.InputLabel [HH.ClassName "ColorPicker-inputLabel"]
-    , Tuple CPicker.InputElem [HH.ClassName "ColorPicker-inputElem"]
-    , Tuple CPicker.InputElemInvalid [HH.ClassName "ColorPicker-inputElem--invalid"]
-    , Tuple CPicker.Actions [HH.ClassName "ColorPicker-actions"]
-    , Tuple CPicker.ActionSet [HH.ClassName "ColorPicker-actionSet"]
-    ]
   }
+  where
+  inputClasses ∷ L.InputProps
+  inputClasses =
+    { root: [H.ClassName "ColorPicker-input"]
+    , label: [H.ClassName "ColorPicker-inputLabel"]
+    , elem: [H.ClassName "ColorPicker-inputElem"]
+    , elemInvalid: [H.ClassName "ColorPicker-inputElem--invalid"]
+    }
 
 type Input = Unit
 
