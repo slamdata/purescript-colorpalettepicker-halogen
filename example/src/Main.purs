@@ -68,7 +68,7 @@ render _ = HH.div_
         HH.div
           [ HP.classes [HH.ClassName "Compact-expand"]
           , HP.id_ "foo"
-          , HE.onMouseDown $ spy >>> (const $ Just $ expand)
+          , HE.onClick $ spy >>> (const $ Just $ expand)
           -- , HCSS.style $ CSS.backgroundColor value
           ] [HH.text "EXPAND"]
     , detailView: \{embed, compact} ->
