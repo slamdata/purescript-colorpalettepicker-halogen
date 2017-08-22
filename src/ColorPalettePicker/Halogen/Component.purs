@@ -29,16 +29,14 @@ import CSS as CSS
 import Color (Color)
 import Color as Color
 import ColorPalettePicker.Utils.Palettes (PaletteGenerator, mkPalette, runPalette, toCSSGradient, divergingPaletteGenerator, qualitativePaletteGenerator, sequentialPaletteGenerator)
+import ColorPalettePicker.Halogen.PickerLayout as PickerLayout
 import ColorPicker.Halogen.Component as CPicker
-import ColorPicker.Halogen.Layout as L
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.MonadZero (guard)
 import Control.Plus (empty)
 import Data.Either.Nested as Either
 import Data.Functor.Coproduct.Nested as Coproduct
-import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust, maybe)
-import Data.Tuple (Tuple(..))
 import Debug.Trace (spy)
 import Halogen as H
 import Halogen.Component.ChildPath as CP
@@ -52,56 +50,6 @@ type State = {
   color :: Color
 }
 
-
-colorPickerProps ∷ CPicker.Props
-colorPickerProps =
-  { layout:
-    [ H.ClassName "ColorPicker" ] `L.Root`
-      [ [ H.ClassName "ColorPicker-dragger" ] `L.Group`
-          [ L.Component $ L.componentDragSV
-              { root: [ H.ClassName "ColorPicker-field" ]
-              , isLight: [ H.ClassName "IsLight" ]
-              , isDark: [ H.ClassName "IsDark" ]
-              , selector: [ H.ClassName "ColorPicker-fieldSelector"]
-              }
-          , L.Component $ L.componentDragHue
-              { root: [ H.ClassName "ColorPicker-slider" ]
-              , selector: [ H.ClassName "ColorPicker-sliderSelector"]
-              }
-          ]
-      , [ H.ClassName "ColorPicker-aside" ] `L.Group`
-          [ [ H.ClassName "ColorPicker-stage" ] `L.Group`
-              [ L.Component $ L.componentPreview [ H.ClassName "ColorPicker-colorBlockCurrent" ]
-              , L.Component $ L.componentHistory 4 [ H.ClassName "ColorPicker-colorBlockOld" ]
-              ]
-          , [ H.ClassName "ColorPicker-editing" ] `L.Group`
-              [ [ H.ClassName "ColorPicker-editingItem" ] `L.Group`
-                  [ L.Component $ L.componentHue inputClasses
-                  , L.Component $ L.componentSaturationHSV inputClasses
-                  , L.Component $ L.componentValue inputClasses
-                  , L.Component $ L.componentSaturationHSL inputClasses
-                  , L.Component $ L.componentLightness inputClasses
-                  ]
-              , [ H.ClassName "ColorPicker-editingItem" ] `L.Group`
-                  [ L.Component $ L.componentRed inputClasses
-                  , L.Component $ L.componentGreen inputClasses
-                  , L.Component $ L.componentBlue inputClasses
-                  , L.Component $ L.componentHEX inputClasses
-                  ]
-              ]
-          , [ H.ClassName "ColorPicker-actions" ] `L.Group`
-              [ L.Component $ L.componentSet [ H.ClassName "ColorPicker-actionSet" ] ]
-          ]
-      ]
-  }
-  where
-  inputClasses ∷ L.InputProps
-  inputClasses =
-    { root: [H.ClassName "ColorPicker-input"]
-    , label: [H.ClassName "ColorPicker-inputLabel"]
-    , elem: [H.ClassName "ColorPicker-inputElem"]
-    , elemInvalid: [H.ClassName "ColorPicker-inputElem--invalid"]
-    }
 
 type Input = Unit
 
@@ -132,7 +80,7 @@ input = H.parentComponent
 
 render ∷ ∀ m r. MonadAff (PickerEffects r) m => State → HTML m
 render state = HH.div [HP.class_ $ HH.ClassName $ "ColorSchemePicker"] $
-  [ HH.slot' cpColor unit CPicker.picker colorPickerProps $ HE.input PickerEvents
+  [ HH.slot' cpColor unit CPicker.picker PickerLayout.props $ HE.input PickerEvents
   , HH.div [HP.class_ $ HH.ClassName $ "Picker-paletteGroupes"] paletteGroupes
   ]
   where
@@ -174,7 +122,7 @@ render state = HH.div [HP.class_ $ HH.ClassName $ "ColorSchemePicker"] $
 
 
 eval ∷ ∀ m . Query ~> DSL m
-eval = spy >>> case _ of
+eval = case _ of
   Query next -> pure next
   PickerEvents msg next -> do
     case msg of
