@@ -16,6 +16,7 @@
 
 module ColorPalettePicker.Halogen.Component
   ( input
+  , Input
   , Query(..)
   , Message(..)
   , PickerEffects
@@ -31,12 +32,14 @@ import ColorPalettePicker.Utils.Palettes (PaletteGenerator, mkPalette, runPalett
 import ColorPicker.Halogen.ColorComponents as CPickerComponents
 import ColorPicker.Halogen.Component as CPicker
 import Control.Monad.Aff.Class (class MonadAff)
+import Control.MonadZero (guard)
 import Control.Plus (empty)
 import Data.Either.Nested as Either
 import Data.Functor.Coproduct.Nested as Coproduct
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), isJust, maybe)
 import Data.Tuple (Tuple(..))
+import Debug.Trace (spy)
 import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
@@ -81,6 +84,8 @@ colorPickerProps =
     ]
   }
 
+type Input = Unit
+
 type Message = Unit
 data Query next
   = Query next
@@ -89,6 +94,7 @@ data Query next
 type ChildQuery = Coproduct.Coproduct1 CPicker.Query
 type Slot = Either.Either1 Unit
 
+
 cpColor ∷ CP.ChildPath CPicker.Query ChildQuery Unit Slot
 cpColor = CP.cp1
 
@@ -96,7 +102,8 @@ type DSL = H.ParentDSL State Query ChildQuery Slot Message
 type HTML m = H.ParentHTML Query ChildQuery Slot m
 
 type PickerEffects r = CPicker.PickerEffects r
-input ∷ ∀ m r. MonadAff (PickerEffects r) m => H.Component HH.HTML Query Unit Message m
+
+input ∷ ∀ m r. MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
 input = H.parentComponent
   { initialState: const $ {color: Color.hsl 0.0 1.0 0.5}
   , render: render
@@ -124,27 +131,31 @@ render state = HH.div [HP.class_ $ HH.ClassName $ "ColorSchemePicker"] $
       , HH.div
         [ HP.class_ $ H.ClassName "ColorPalettePicker-paletteGroupItems" ]
         $ generators <#> \generator ->
-          HH.div
-          [ HP.class_ $ HH.ClassName $ "ColorPalettePicker-paletteGroupItem"]
           (renderPalette (mkPalette generator state.color))
+
+
       ]
   renderPalette palette =
-    [ HH.div [HP.class_ $ HH.ClassName $ "Picker-palette" ]
-      $ runPalette palette 9 <#> \color -> HH.div
-        [ HCSS.style $ CSS.backgroundColor color
-        , HP.class_ $ HH.ClassName $ "Picker-paletteColor"
-        ] []
-    ] <> gradient
+    HH.div
+      [ HP.classes  $ [HH.ClassName "ColorPalettePicker-paletteGroupItem"] <> hasGradient] $
+      [ HH.div [HP.class_ $ HH.ClassName $ "Picker-palette" ]
+        $ runPalette palette 9 <#> \color -> HH.div
+          [ HCSS.style $ CSS.backgroundColor color
+          , HP.class_ $ HH.ClassName $ "Picker-paletteColor"
+          ] []
+      ] <> gradient
     where
     toAlt = maybe empty pure
-    gradient = toAlt $ toCSSGradient palette <#> \img -> HH.div
+    hasGradient = guard (isJust cssGradient) $> H.ClassName "hasGradient"
+    cssGradient = toCSSGradient palette
+    gradient = toAlt $ cssGradient <#> \img -> HH.div
       [ HP.class_ $ HH.ClassName $ "Picker-paletteGradient"
       , HCSS.style $ CSS.backgroundImage img
       ] []
 
 
 eval ∷ ∀ m . Query ~> DSL m
-eval = case _ of
+eval = spy >>> case _ of
   Query next -> pure next
   PickerEvents msg next -> do
     case msg of
