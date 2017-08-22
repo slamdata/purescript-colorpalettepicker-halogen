@@ -4,9 +4,11 @@ import Prelude
 
 import Data.Coyoneda (Coyoneda, liftCoyoneda, unCoyoneda)
 import Data.Maybe (Maybe(..))
+import Data.Tuple (Tuple(..))
 import Debug.Trace (spy)
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.Query.HalogenM as HQ
 
@@ -97,16 +99,17 @@ render ∷ ∀ innerQuery innerQuery innerProps innerMsg m
   → State innerProps innerMsg
   → HTML innerQuery innerProps innerMsg m
 render child { isExpanded, props } =
-  HH.div_
-    [ HH.text $ show isExpanded,
-      if isExpanded then
-        props.detailView
-          { compact: H.action Compact
-          , embed: \innerProps ->
-              HH.slot unit child innerProps $ HE.input HandleInnerMsg }
-      else
-        props.compactView
-          { expand: H.action Expand }
+  HK.div_
+    [ Tuple "expanded-indicator" $ HH.text (show isExpanded)
+    , Tuple (if isExpanded then "inner-exp" else "inner-comp") $
+        if isExpanded then
+          props.detailView
+            { compact: H.action Compact
+            , embed: \innerProps ->
+                HH.slot unit child innerProps $ HE.input HandleInnerMsg }
+        else
+          props.compactView
+            { expand: H.action Expand }
     ]
 
 
