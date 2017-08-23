@@ -1,19 +1,24 @@
 module ColorPalettePicker.Utils.Palettes
-  ( divergingPaletteGenerator
-  , qualitativePaletteGenerator
-  , sequentialPaletteGenerator
-
-  , PaletteGenerator(..)
-  , SequentialGeneratorSpec
-  , DivergingGeneratorSpec
-  , QualitativeGeneratorSpec
-  , ColorHSL
-
-  , Palette
-  , runPalette
+  ( Palette
   , mkPalette
 
-  , toCSSGradient
+  , SequentialGenerator(..)
+  , SequentialGeneratorSpec
+  , sequentialToCSSGradient
+  , sequentialPaletteGenerators
+  , runSequentialGenerator
+
+  , DivergingGenerator(..)
+  , DivergingGeneratorSpec
+  , divergingToCSSGradient
+  , divergingPaletteGenerators
+  , runDivergingGenerator
+
+  , QualitativeGenerator(..)
+  , QualitativeGeneratorSpec
+  , ColorHSL
+  , qualitativePaletteGenerators
+  , runQualitativeGenerator
   ) where
 
 import Prelude
@@ -28,67 +33,77 @@ import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
 import Data.Foldable (foldr)
 import Data.List (List(..), (:))
 import Data.List as List
-import Data.Maybe (Maybe(..))
 import Math (abs, sqrt, (%))
 
-type Palette = { generator :: PaletteGenerator, seed :: Color }
+type Palette =
+  { seed :: Color
+  , sequential :: SequentialGenerator
+  , diverging :: DivergingGenerator
+  , qualitative :: QualitativeGenerator
+  }
 
-toCSSGradient :: Palette -> Maybe CSS.BackgroundImage
-toCSSGradient { generator, seed } = case generator of
-  SequentialGenerator spec -> Just $ mkGradient $ runSequentialGeneratorSpec spec seed 5
-  DivergingGenerator spec -> Just $ mkGradient $ runDivergingGeneratorSpec spec seed 10
-  QualitativeGenerator spec -> Nothing
-  where
-  mkGradient colors = CSS.fromString
-    $ "linear-gradient(to right, " <> intercalate ", " (map Color.cssStringHSLA colors) <> ")"
+data PaletteType = Sequential | Diverging | Qualitative
 
 
-data PaletteGenerator
-  = SequentialGenerator SequentialGeneratorSpec
-  | DivergingGenerator DivergingGeneratorSpec
-  | QualitativeGenerator QualitativeGeneratorSpec
-
-derive instance paletteGeneratorEq :: Eq PaletteGenerator
-derive instance paletteGeneratorOrd :: Ord PaletteGenerator
+newtype SequentialGenerator = SequentialGenerator SequentialGeneratorSpec
 
 type SequentialGeneratorSpec =
   { hueShift :: Number }
+
+derive instance sequentialGeneratorrEq :: Eq SequentialGenerator
+derive instance sequentialGeneratorOrd :: Ord SequentialGenerator
+
+
+newtype DivergingGenerator = DivergingGenerator DivergingGeneratorSpec
 
 type DivergingGeneratorSpec =
   { sequentialGenerator :: SequentialGeneratorSpec
   , startColorHueShift :: Number
   }
 
+derive instance divergingGeneratororEq :: Eq DivergingGenerator
+derive instance divergingGeneratorOrd :: Ord DivergingGenerator
+
+
+newtype QualitativeGenerator = QualitativeGenerator QualitativeGeneratorSpec
+
 type QualitativeGeneratorSpec =
   { colors :: Array ColorHSL }
-
-type PaletteRunner = Color -> Int -> Array Color
 
 newtype ColorHSL = ColorHSL { h :: Number, s :: Number, l :: Number }
 
 derive instance colorHSLEq :: Eq ColorHSL
 derive instance colorHSLOrd :: Ord ColorHSL
 
+derive instance qualitativeGeneratorEq :: Eq QualitativeGenerator
+derive instance qualitativeGeneratorOrd :: Ord QualitativeGenerator
 
-mkPalette :: PaletteGenerator -> Color -> Palette
-mkPalette = { generator: _, seed: _ }
 
-runPalette :: Palette -> Int -> Array Color
-runPalette { generator, seed } = seed # case generator of
-    SequentialGenerator spec -> runSequentialGeneratorSpec spec
-    DivergingGenerator spec -> runDivergingGeneratorSpec spec
-    QualitativeGenerator spec -> runQualitativeGeneratorSpec spec
+type PaletteRunner = Color -> Int -> Array Color
 
-sequentialPaletteGenerator :: Array PaletteGenerator
-sequentialPaletteGenerator = map
+mkPalette
+  :: Color
+  -> SequentialGenerator
+  -> DivergingGenerator
+  -> QualitativeGenerator
+  -> Palette
+mkPalette =
+  { seed: _
+  , sequential: _
+  , diverging: _
+  , qualitative: _
+  }
+
+sequentialPaletteGenerators :: Array SequentialGenerator
+sequentialPaletteGenerators = map
   ({hueShift: _} >>> SequentialGenerator)
   (hueShifts [ 0.0 ] [ 30.0, 60.0, 90.0, 120.0 ])
   where
   hueShifts :: Array Number -> Array Number -> Array Number
   hueShifts mid hues = reverse hues <> mid <> map (_ * -1.0) hues
 
-divergingPaletteGenerator :: Array PaletteGenerator
-divergingPaletteGenerator = do
+divergingPaletteGenerators :: Array DivergingGenerator
+divergingPaletteGenerators = do
   hueShift <- [45.0, 25.0, 0.0, -25.0, -45.0]
   secondaryHueShift <- [ -135.0, -90.0, 90.0, 135.0, 180.0]
   pure $ DivergingGenerator
@@ -96,8 +111,8 @@ divergingPaletteGenerator = do
     , startColorHueShift: secondaryHueShift
     }
 
-qualitativePaletteGenerator :: Array PaletteGenerator
-qualitativePaletteGenerator = map
+qualitativePaletteGenerators :: Array QualitativeGenerator
+qualitativePaletteGenerators = map
   ({colors: _} >>> QualitativeGenerator)
   [ [ hsl 0.0     0.0     0.4
     , hsl 24.29   0.785   0.4196
@@ -186,8 +201,8 @@ qualitativePaletteGenerator = map
   hsl h s l = ColorHSL {h, s, l}
 
 
-runQualitativeGeneratorSpec :: QualitativeGeneratorSpec -> PaletteRunner
-runQualitativeGeneratorSpec {colors} seedColor =
+runQualitativeGenerator :: QualitativeGenerator -> PaletteRunner
+runQualitativeGenerator (QualitativeGenerator {colors}) seedColor =
   takeer seedColor $
     fromFoldable $ foldr foldFunc List.Nil colors
   where
@@ -223,11 +238,11 @@ runQualitativeGeneratorSpec {colors} seedColor =
     b_l = b.l * 100.0
   sqr a = a * a
 
-runSequentialGeneratorSpec :: SequentialGeneratorSpec -> PaletteRunner
-runSequentialGeneratorSpec spec = preScaleToGenerator $ mkSequentialPalette spec.hueShift
+runSequentialGenerator :: SequentialGenerator -> PaletteRunner
+runSequentialGenerator (SequentialGenerator spec) = preScaleToGenerator $ mkSequentialPalette spec.hueShift
 
-runDivergingGeneratorSpec :: DivergingGeneratorSpec -> PaletteRunner
-runDivergingGeneratorSpec spec = preScaleToGenerator \color ->
+runDivergingGenerator :: DivergingGenerator -> PaletteRunner
+runDivergingGenerator (DivergingGenerator spec) = preScaleToGenerator \color ->
     let
       hsl = Color.toHSLA color
       start = reverseScale
@@ -235,6 +250,17 @@ runDivergingGeneratorSpec spec = preScaleToGenerator \color ->
         $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
       end = mkSequentialPalette spec.sequentialGenerator.hueShift color
     in start `combineScale 0.5` end
+
+sequentialToCSSGradient :: SequentialGenerator -> Color -> CSS.BackgroundImage
+sequentialToCSSGradient g seed = mkGradient $ runSequentialGenerator g seed 5
+
+divergingToCSSGradient :: DivergingGenerator -> Color -> CSS.BackgroundImage
+divergingToCSSGradient g seed = mkGradient $ runDivergingGenerator g seed 10
+
+
+mkGradient :: Array Color -> CSS.BackgroundImage
+mkGradient colors = CSS.fromString
+  $ "linear-gradient(to right, " <> intercalate ", " (map Color.cssStringHSLA colors) <> ")"
 
 preScaleToGenerator :: (Color -> PreScale) -> PaletteRunner
 preScaleToGenerator f c n = fromFoldable $ Scale.colors (mkScale Color.Lab $ f c) n

@@ -73,6 +73,9 @@ liftQuery :: ∀ innerQuery innerProps innerMsg
 liftQuery = QueryInner <<< liftCoyoneda
 
 
+
+-- TODO define "Identity Component" to be used for cases where
+-- component is not used for details
 factory ∷ ∀ innerQuery innerQuery innerProps innerMsg m
   . H.Component
       HH.HTML
@@ -92,7 +95,6 @@ factory child = H.parentComponent
   , eval
   , receiver: HE.input SetProps
   }
-
 render ∷ ∀ innerQuery innerQuery innerProps innerMsg m
   . H.Component
       HH.HTML
