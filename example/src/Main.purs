@@ -68,7 +68,7 @@ render _ = HH.div_
         HH.div
           [ HP.classes [HH.ClassName "Compact-expand"]
           , HP.id_ "foo"
-          , HE.onClick $ spy >>> (const $ Just $ expand)
+          , HE.onClick $ const $ Just $ expand
           -- , HCSS.style $ CSS.backgroundColor value
           ] [HH.text "EXPAND"]
     , detailView: \{embed, compact} ->
@@ -77,11 +77,12 @@ render _ = HH.div_
           [ HH.div
             [ HP.classes [HH.ClassName "Compact-compact"]
             , HP.id_ "bar"
-            , HE.onClick $ spy >>> (const $ Just $ compact)
+            , HE.onClick $ const $ Just $ compact
             ] [HH.text "COMPACT"]
           , embed unit
           ]
-    , shouldCompact: spy >>> const true
+    , shouldCompact: const true
+    , rootClasses: []
     }
     $ HE.input CompactQuery
   ]

@@ -5,9 +5,9 @@ import Prelude
 import Data.Coyoneda (Coyoneda, liftCoyoneda, unCoyoneda)
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
-import Debug.Trace (spy)
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Properties as HP
 import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.Query.HalogenM as HQ
@@ -43,15 +43,19 @@ type Props innerProps innerMsg =
       }
      -> HH.HTML q i
   , shouldCompact :: innerMsg -> Boolean
+  , rootClasses :: Array H.ClassName
   }
 
+
 type Slot = Unit
+
 type HTML innerQuery innerProps innerMsg m =
   H.ParentHTML
   (Query innerQuery innerProps innerMsg)
   innerQuery
   Slot
   m
+
 type DSL innerQuery innerProps innerMsg m =
   H.ParentDSL
   (State innerProps innerMsg)
@@ -62,8 +66,8 @@ type DSL innerQuery innerProps innerMsg m =
   m
 
 
--- | Lift a query from the inner component to a query of the HOC. Useful when
--- | querying a component thats "inside" this HOC.
+-- | Lift a query from the inner component to a query of this Component.
+-- | Useful when querying a component thats "inside".
 liftQuery :: ∀ innerQuery innerProps innerMsg
   . innerQuery ~> Query innerQuery innerProps innerMsg
 liftQuery = QueryInner <<< liftCoyoneda
@@ -99,9 +103,10 @@ render ∷ ∀ innerQuery innerQuery innerProps innerMsg m
   → State innerProps innerMsg
   → HTML innerQuery innerProps innerMsg m
 render child { isExpanded, props } =
-  HK.div_
-    [ Tuple "expanded-indicator" $ HH.text (show isExpanded)
-    , Tuple (if isExpanded then "inner-exp" else "inner-comp") $
+  -- We do not need to use keyed nodes and this root node, after this is fixed:
+  -- https://github.com/slamdata/purescript-halogen/issues/472
+  HK.div [ HP.classes props.rootClasses ]
+    [ Tuple (show isExpanded) $
         if isExpanded then
           props.detailView
             { compact: H.action Compact
@@ -116,16 +121,16 @@ render child { isExpanded, props } =
 eval ∷ ∀ innerQuery innerQuery innerProps innerMsg m
   . Query innerQuery innerProps innerMsg
   ~> DSL innerQuery innerProps innerMsg m
-eval = spy >>> case _ of
+eval = case _ of
   CheckIsExpanded request -> do
     H.gets $ _.isExpanded >>> request
   Expand next -> do
     H.modify _{isExpanded = true}
-    -- H.raise $ Expanded
+    H.raise $ Expanded
     pure next
   Compact next -> do
     H.modify _{isExpanded = false}
-    -- H.raise $ Compacted
+    H.raise $ Compacted
     pure next
   SetProps props next -> do
     H.modify _{props = props}
