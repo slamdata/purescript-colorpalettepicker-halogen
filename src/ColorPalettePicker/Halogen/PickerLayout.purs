@@ -35,18 +35,16 @@ props =
                   [ L.Component $ L.componentHue inputClasses
                   , L.Component $ L.componentSaturationHSV inputClasses
                   , L.Component $ L.componentValue inputClasses
-                  , L.Component $ L.componentSaturationHSL inputClasses
-                  , L.Component $ L.componentLightness inputClasses
+                  , L.Component $ L.componentHEX inputClasses
                   ]
               , [ H.ClassName "ColorPicker-editingItem" ] `L.Group`
                   [ L.Component $ L.componentRed inputClasses
                   , L.Component $ L.componentGreen inputClasses
                   , L.Component $ L.componentBlue inputClasses
-                  , L.Component $ L.componentHEX inputClasses
+                  , [ H.ClassName "ColorPicker-actions" ] `L.Group`
+                      [ L.Component $ L.componentSet [ H.ClassName "ColorPicker-actionSet" ] ]
                   ]
               ]
-          , [ H.ClassName "ColorPicker-actions" ] `L.Group`
-              [ L.Component $ L.componentSet [ H.ClassName "ColorPicker-actionSet" ] ]
           ]
       ]
   }

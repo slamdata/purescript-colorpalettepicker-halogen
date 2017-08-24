@@ -29,11 +29,14 @@ import Color as Color
 import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (quadratic)
 import ColorPalettePicker.Utils.PreScale (PreScale, colorStop, combineScale, mkScale, reverseScale)
-import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
+import Data.Array (fromFoldable, intercalate, reverse, sortBy, take, uncons)
 import Data.Foldable (foldr)
 import Data.List (List(..), (:))
 import Data.List as List
+import Data.Maybe (fromJust)
+import Data.NonEmpty (NonEmpty(..))
 import Math (abs, sqrt, (%))
+import Partial.Unsafe (unsafePartial)
 
 type Palette =
   { seed :: Color
@@ -94,16 +97,16 @@ mkPalette =
   , qualitative: _
   }
 
-sequentialPaletteGenerators :: Array SequentialGenerator
-sequentialPaletteGenerators = map
+sequentialPaletteGenerators :: NonEmpty Array SequentialGenerator
+sequentialPaletteGenerators = nonEmpty $ map
   ({hueShift: _} >>> SequentialGenerator)
   (hueShifts [ 0.0 ] [ 30.0, 60.0, 90.0, 120.0 ])
   where
   hueShifts :: Array Number -> Array Number -> Array Number
   hueShifts mid hues = reverse hues <> mid <> map (_ * -1.0) hues
 
-divergingPaletteGenerators :: Array DivergingGenerator
-divergingPaletteGenerators = do
+divergingPaletteGenerators :: NonEmpty Array DivergingGenerator
+divergingPaletteGenerators = nonEmpty $ do
   hueShift <- [45.0, 25.0, 0.0, -25.0, -45.0]
   secondaryHueShift <- [ -135.0, -90.0, 90.0, 135.0, 180.0]
   pure $ DivergingGenerator
@@ -111,8 +114,8 @@ divergingPaletteGenerators = do
     , startColorHueShift: secondaryHueShift
     }
 
-qualitativePaletteGenerators :: Array QualitativeGenerator
-qualitativePaletteGenerators = map
+qualitativePaletteGenerators :: NonEmpty Array QualitativeGenerator
+qualitativePaletteGenerators = nonEmpty $ map
   ({colors: _} >>> QualitativeGenerator)
   [ [ hsl 0.0     0.0     0.4
     , hsl 24.29   0.785   0.4196
@@ -201,10 +204,9 @@ qualitativePaletteGenerators = map
   hsl h s l = ColorHSL {h, s, l}
 
 
-runQualitativeGenerator :: QualitativeGenerator -> PaletteRunner
-runQualitativeGenerator (QualitativeGenerator {colors}) seedColor =
-  takeer seedColor $
-    fromFoldable $ foldr foldFunc List.Nil colors
+runQualitativeGenerator :: Int -> Color -> QualitativeGenerator -> Array Color
+runQualitativeGenerator n seedColor (QualitativeGenerator {colors}) =
+  takeer seedColor (fromFoldable $ foldr foldFunc List.Nil colors) n
   where
   distance start end = abs $ end - start
   seed = Color.toHSLA seedColor
@@ -238,11 +240,16 @@ runQualitativeGenerator (QualitativeGenerator {colors}) seedColor =
     b_l = b.l * 100.0
   sqr a = a * a
 
-runSequentialGenerator :: SequentialGenerator -> PaletteRunner
-runSequentialGenerator (SequentialGenerator spec) = preScaleToGenerator $ mkSequentialPalette spec.hueShift
+runSequentialGenerator :: Int -> Color -> SequentialGenerator -> Array Color
+runSequentialGenerator n seed (SequentialGenerator spec) =
+  (preScaleToGenerator $ mkSequentialPalette spec.hueShift)
+  seed
+  n
 
-runDivergingGenerator :: DivergingGenerator -> PaletteRunner
-runDivergingGenerator (DivergingGenerator spec) = preScaleToGenerator \color ->
+runDivergingGenerator :: Int -> Color -> DivergingGenerator -> Array Color
+runDivergingGenerator n seed (DivergingGenerator spec) = (preScaleToGenerator scale) seed n
+  where
+  scale = \color ->
     let
       hsl = Color.toHSLA color
       start = reverseScale
@@ -251,12 +258,17 @@ runDivergingGenerator (DivergingGenerator spec) = preScaleToGenerator \color ->
       end = mkSequentialPalette spec.sequentialGenerator.hueShift color
     in start `combineScale 0.5` end
 
-sequentialToCSSGradient :: SequentialGenerator -> Color -> CSS.BackgroundImage
-sequentialToCSSGradient g seed = mkGradient $ runSequentialGenerator g seed 5
+sequentialToCSSGradient ::  Color -> SequentialGenerator -> CSS.BackgroundImage
+sequentialToCSSGradient seed g = mkGradient $ runSequentialGenerator 5 seed g
 
-divergingToCSSGradient :: DivergingGenerator -> Color -> CSS.BackgroundImage
-divergingToCSSGradient g seed = mkGradient $ runDivergingGenerator g seed 10
+divergingToCSSGradient :: Color -> DivergingGenerator -> CSS.BackgroundImage
+divergingToCSSGradient seed g = mkGradient $ runDivergingGenerator 10 seed g
 
+
+nonEmpty :: ∀ a. Array a -> NonEmpty Array a
+nonEmpty arr =
+  let {head, tail} = (unsafePartial $ fromJust $ uncons arr)
+  in NonEmpty head tail
 
 mkGradient :: Array Color -> CSS.BackgroundImage
 mkGradient colors = CSS.fromString
