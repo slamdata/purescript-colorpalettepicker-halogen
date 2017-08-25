@@ -1,5 +1,6 @@
 module ColorPalettePicker.Utils.Palettes
   ( Palette
+  , ScaleSampler(..)
   , mkPalette
 
   , SequentialGenerator(..)
@@ -27,8 +28,8 @@ import CSS as CSS
 import Color (Color)
 import Color as Color
 import Color.Scale as Scale
-import ColorPalettePicker.Utils.Easing (quadratic)
-import ColorPalettePicker.Utils.PreScale (PreScale, colorStop, combineScale, mkScale, reverseScale)
+import ColorPalettePicker.Utils.Easing (linear, quadratic)
+import ColorPalettePicker.Utils.PreScale (PreScale, colorStop, combineScale, mkScale, mkScaleBuilder, reverseScale)
 import Data.Array (fromFoldable, intercalate, reverse, sortBy, take, uncons)
 import Data.Foldable (foldr)
 import Data.List (List(..), (:))
@@ -51,9 +52,17 @@ data PaletteType = Sequential | Diverging | Qualitative
 newtype SequentialGenerator = SequentialGenerator SequentialGeneratorSpec
 
 type SequentialGeneratorSpec =
-  { hueShift :: Number }
+  { hueShift :: Number
+  , sampler :: ScaleSampler
+  , darknessRange :: { min :: Number, max :: Number }
+  }
 
-derive instance sequentialGeneratorrEq :: Eq SequentialGenerator
+data ScaleSampler = LinearSample | CubehelixSample
+
+derive instance scaleSamplerEq :: Eq ScaleSampler
+derive instance scaleSamplerOrd :: Ord ScaleSampler
+
+derive instance sequentialGeneratorEq :: Eq SequentialGenerator
 derive instance sequentialGeneratorOrd :: Ord SequentialGenerator
 
 
@@ -64,7 +73,7 @@ type DivergingGeneratorSpec =
   , startColorHueShift :: Number
   }
 
-derive instance divergingGeneratororEq :: Eq DivergingGenerator
+derive instance divergingGeneratorEq :: Eq DivergingGenerator
 derive instance divergingGeneratorOrd :: Ord DivergingGenerator
 
 
@@ -97,22 +106,39 @@ mkPalette =
   , qualitative: _
   }
 
+mkCubehelixGenerators :: Array Number -> Array SequentialGenerator
+mkCubehelixGenerators shifts = shifts <#>
+  ({ hueShift: _, sampler: CubehelixSample, darknessRange: {min: 0.1, max: 0.5} } >>> SequentialGenerator )
+
 sequentialPaletteGenerators :: NonEmpty Array SequentialGenerator
-sequentialPaletteGenerators = nonEmpty $ map
-  ({hueShift: _} >>> SequentialGenerator)
-  (hueShifts [ 0.0 ] [ 30.0, 60.0, 90.0, 120.0 ])
+sequentialPaletteGenerators = nonEmpty $ cubehelixGenerators <> linearGenerators
   where
+  cubehelixGenerators = mkCubehelixGenerators $
+    hueShifts [ 0.0] [ 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0, 360.0]
+  linearGenerators = map
+    ({hueShift: _, sampler: LinearSample, darknessRange: {min: 0.25, max: 0.5} } >>> SequentialGenerator)
+    (hueShifts [ 0.0 ] [ 30.0, 60.0, 90.0, 120.0 ])
   hueShifts :: Array Number -> Array Number -> Array Number
   hueShifts mid hues = reverse hues <> mid <> map (_ * -1.0) hues
 
 divergingPaletteGenerators :: NonEmpty Array DivergingGenerator
-divergingPaletteGenerators = nonEmpty $ do
-  hueShift <- [45.0, 25.0, 0.0, -25.0, -45.0]
-  secondaryHueShift <- [ -135.0, -90.0, 90.0, 135.0, 180.0]
-  pure $ DivergingGenerator
-    { sequentialGenerator: { hueShift }
-    , startColorHueShift: secondaryHueShift
-    }
+divergingPaletteGenerators = nonEmpty $ cubehelixGenerators <> linearGenerators
+  where
+  cubehelixGenerators = do
+    sequentialGenerator <- [60.0, 30.0, 0.0, -30.0, -60.0] <#>
+      { hueShift:_, sampler: CubehelixSample, darknessRange: {min: 0.1, max: 0.3} }
+    secondaryHueShift <- [-135.0, -90.0, 90.0, 135.0, 180.0]
+    pure $ DivergingGenerator
+      { sequentialGenerator
+      , startColorHueShift: secondaryHueShift
+      }
+  linearGenerators = do
+    sequentialGenerator <- [45.0, 25.0, 0.0, -25.0, -45.0] <#> { hueShift:_, sampler: LinearSample, darknessRange: {min: 0.25, max: 0.5} }
+    secondaryHueShift <- [-135.0, -90.0, 90.0, 135.0, 180.0]
+    pure $ DivergingGenerator
+      { sequentialGenerator
+      , startColorHueShift: secondaryHueShift
+      }
 
 qualitativePaletteGenerators :: NonEmpty Array QualitativeGenerator
 qualitativePaletteGenerators = nonEmpty $ map
@@ -242,20 +268,20 @@ runQualitativeGenerator n seedColor (QualitativeGenerator {colors}) =
 
 runSequentialGenerator :: Int -> Color -> SequentialGenerator -> Array Color
 runSequentialGenerator n seed (SequentialGenerator spec) =
-  (preScaleToGenerator $ mkSequentialPalette spec.hueShift)
+  (preScaleToGenerator spec.sampler $ mkSequentialPalette spec)
   seed
   n
 
 runDivergingGenerator :: Int -> Color -> DivergingGenerator -> Array Color
-runDivergingGenerator n seed (DivergingGenerator spec) = (preScaleToGenerator scale) seed n
+runDivergingGenerator n seed (DivergingGenerator spec) = (preScaleToGenerator spec.sequentialGenerator.sampler scale) seed n
   where
   scale = \color ->
     let
       hsl = Color.toHSLA color
       start = reverseScale
-        $ mkSequentialPalette spec.sequentialGenerator.hueShift
+        $ mkSequentialPalette spec.sequentialGenerator
         $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
-      end = mkSequentialPalette spec.sequentialGenerator.hueShift color
+      end = mkSequentialPalette spec.sequentialGenerator color
     in start `combineScale 0.5` end
 
 sequentialToCSSGradient ::  Color -> SequentialGenerator -> CSS.BackgroundImage
@@ -274,23 +300,35 @@ mkGradient :: Array Color -> CSS.BackgroundImage
 mkGradient colors = CSS.fromString
   $ "linear-gradient(to right, " <> intercalate ", " (map Color.cssStringHSLA colors) <> ")"
 
-preScaleToGenerator :: (Color -> PreScale) -> PaletteRunner
-preScaleToGenerator f c n = fromFoldable $ Scale.colors (mkScale Color.Lab $ f c) n
+preScaleToGenerator :: ScaleSampler -> (Color -> PreScale) -> PaletteRunner
+preScaleToGenerator LinearSample f c n = fromFoldable $ Scale.colors (mkScale Color.Lab $ f c) n
+preScaleToGenerator CubehelixSample f c n = fromFoldable $ Scale.colors' (Scale.cubehelixSample $ mkScaleBuilder $ f c) n
 
-mkSequentialPalette :: Number -> Color -> PreScale
-mkSequentialPalette hueShift inputColor = {start: startColor, stops, end: endColor}
+
+mkSequentialPalette
+  :: SequentialGeneratorSpec
+  -> Color
+  -> PreScale
+mkSequentialPalette {hueShift, sampler, darknessRange} inputColor = {start: startColor, stops, end: endColor}
   where
-  input = Color.toHSVA inputColor
-  endColor = Color.hsva
+  input = Color.toHSLA inputColor
+  endL = quadratic darknessRange.min darknessRange.max input.l
+  -- endL = case sampler of
+  --   LinearSample → quadratic 0.25 0.5 input.l
+  --   CubehelixSample → quadratic darknessRange.min darknessRange.max input.l -- 0.0
+  endColor = Color.hsla
     input.h
     (quadratic 0.5 0.90 input.s)
-    (quadratic 0.5 0.95 input.v)
+    endL
     input.a
   end = Color.toHSLA endColor
+  startL = case sampler of
+    LinearSample → linear 0.92 0.97 input.l
+    CubehelixSample → linear 0.85 0.97 input.l -- 1.0
   start =
     { h: end.h + hueShift
     , s: quadratic 0.4 0.70 end.s
-    , l: quadratic 0.92 0.97 end.l
+    , l: startL
     , a: end.a
     }
   startColor = Color.hsla start.h start.s start.l start.a
@@ -301,11 +339,13 @@ mkSequentialPalette hueShift inputColor = {start: startColor, stops, end: endCol
     , a: end.a
     }
   absHueShift = (abs hueShift % 180.0)
-  stops =
-    if absHueShift > 40.0 then
-      colorStop (Color.hsla mid.h mid.s mid.l mid.a) 0.30 : Nil
-    else if absHueShift > 20.0 then
-      colorStop (Color.hsla mid.h mid.s mid.l mid.a) 0.45 : Nil
-    else if absHueShift > 10.0 then
-      colorStop (Color.hsla mid.h mid.s mid.l mid.a) 0.60 : Nil
-    else Nil
+  stops = case sampler of
+    CubehelixSample → Nil
+    LinearSample →
+      if absHueShift > 40.0 then
+        colorStop (Color.hsla mid.h mid.s mid.l mid.a) 0.30 : Nil
+      else if absHueShift > 20.0 then
+        colorStop (Color.hsla mid.h mid.s mid.l mid.a) 0.45 : Nil
+      else if absHueShift > 10.0 then
+        colorStop (Color.hsla mid.h mid.s mid.l mid.a) 0.60 : Nil
+      else Nil

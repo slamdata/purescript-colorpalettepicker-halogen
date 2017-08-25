@@ -14,6 +14,9 @@ colorStop :: Color -> Number -> PreStop
 colorStop = { color: _, ratio: _ }
 
 
+mkScaleBuilder :: PreScale -> Scale.ColorScaleBuilder
+mkScaleBuilder {start, stops, end} = Scale.ColorScaleBuilder start (stops <#> \{color, ratio} -> Scale.colorStop color ratio) end
+
 mkScale :: Color.ColorSpace -> PreScale -> Scale.ColorScale
 mkScale space {start, stops, end} =
   Scale.colorScale space start (stops <#> \{color, ratio} -> Scale.colorStop color ratio) end
