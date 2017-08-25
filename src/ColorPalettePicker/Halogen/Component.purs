@@ -155,7 +155,7 @@ render state = HH.div [HP.class_ $ classes.root] $
         state.sequential.idx
         state.sequential.isOpen
         state.sequential.generator
-        (runSequentialGenerator 30 state.seed)
+        (runSequentialGenerator 16 state.seed)
         (sequentialToCSSGradient state.seed >>> Just)
         (\s -> s{sequential{isOpen = not s.sequential.isOpen}})
         (\idx generator s → s{sequential{ isOpen = false, idx = idx, generator = generator }})
@@ -164,7 +164,7 @@ render state = HH.div [HP.class_ $ classes.root] $
         state.diverging.idx
         state.diverging.isOpen
         state.diverging.generator
-        (runDivergingGenerator 30 state.seed)
+        (runDivergingGenerator 16 state.seed)
         (divergingToCSSGradient state.seed >>> Just)
         (\s -> s{diverging{isOpen = not s.diverging.isOpen}})
         (\idx generator s → s{diverging{ isOpen = false, idx = idx, generator = generator }})
