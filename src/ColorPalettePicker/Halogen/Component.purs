@@ -128,17 +128,17 @@ input = H.parentComponent
       , sequential:
           { idx: 0
           , generator: head sequentialPaletteGenerators
-          , isOpen: true
+          , isOpen: false
           }
       , diverging:
           { idx: 0
           , generator: head divergingPaletteGenerators
-          , isOpen: true
+          , isOpen: false
           }
       , qualitative:
           { idx: 0
           , generator: head qualitativePaletteGenerators
-          , isOpen: true
+          , isOpen: false
           }
       }
   , render: render
@@ -164,7 +164,7 @@ render state = HH.div [HP.class_ $ classes.root] $
         state.diverging.idx
         state.diverging.isOpen
         state.diverging.generator
-        (runDivergingGenerator 16 state.seed)
+        (runDivergingGenerator 26 state.seed)
         (divergingToCSSGradient state.seed >>> Just)
         (\s -> s{diverging{isOpen = not s.diverging.isOpen}})
         (\idx generator s → s{diverging{ isOpen = false, idx = idx, generator = generator }})
