@@ -16,15 +16,18 @@
 
 
 module ColorPalettePicker.Halogen.Component
-  -- ( input
-  -- , Input
-  -- , State
-  -- , PaletteGenerators
-  -- , PaletteGeneratorsF(..)
-  -- , Query(..)
-  -- , Message(..)
-  -- , PickerEffects
-  -- )
+  ( picker
+  , Input
+  , State
+  , PaletteGenerators
+  , PaletteGeneratorsF(..)
+  , Query(..)
+  , Message(..)
+  , PickerEffects
+  , sequentialPaletteGenerators
+  , divergingPaletteGenerators
+  , qualitativePaletteGenerators
+  )
   where
 
 import Prelude
@@ -124,10 +127,10 @@ classes =
   }
 
 
-input ∷ ∀ m r. Array PaletteGenerators -> MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
-input group = H.parentComponent
+picker ∷ ∀ m r. Color -> Array PaletteGenerators -> MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
+picker seed group = H.parentComponent
   { initialState: const $
-      { seed: Color.hsl 0.0 1.0 0.5
+      { seed
       , group
       }
   , render: render
@@ -168,7 +171,7 @@ qualitativePaletteGenerators = mkExists $ PaletteGeneratorsF
 
 render ∷ ∀ m r. MonadAff (PickerEffects r) m => State → HTML m
 render state = HH.div [HP.class_ $ classes.root] $
-  [ HH.slot' cpColor unit CPicker.picker PickerLayout.props $ HE.input PickerEvents
+  [ HH.slot' cpColor unit (CPicker.picker state.seed) PickerLayout.props $ HE.input PickerEvents
   , HH.div
       [HP.class_ $ classes.paletteGroup] $
         mapWithIndex (\idx -> runExists (renderGroup idx)) state.group

@@ -2,6 +2,7 @@ module Main where
 
 import Prelude
 
+import Color.Scheme.X11 (blue)
 import ColorPalettePicker.Halogen.Component as CPP
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.Monad.Eff (Eff)
@@ -13,7 +14,6 @@ import Halogen.Aff as HA
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
--- import Halogen.HTML.Properties as HP
 import Halogen.VDom.Driver (runUI)
 
 main ∷ Eff (HA.HalogenEffects ()) Unit
@@ -48,9 +48,7 @@ example = H.parentComponent
 render ∷ ∀ m r. MonadAff (CPP.PickerEffects r) m => State → HTML m
 render _ = HH.div_
   [ HH.h1_ [ HH.text "Picker 0" ]
-  , HH.slot' cpPicker 0 (CPP.input allGenerators) unit (HE.input Query)
-  -- , HH.h1_ [ HH.text "Picker 1" ]
-  -- , HH.slot' cpPicker 1 (CPP.input) unit (HE.input Query)
+  , HH.slot' cpPicker 0 (CPP.picker blue allGenerators) unit (HE.input Query)
   ]
   where
   allGenerators =
