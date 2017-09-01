@@ -28,7 +28,7 @@ import Color (Color)
 import Color as Color
 import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (linear, quadratic)
-import ColorPalettePicker.Utils.PreScale (combineScale, reverseScale)
+import ColorPalettePicker.Utils.PreScale (combineStops, reverseStops)
 import Data.Array (fromFoldable, intercalate, reverse, sortBy, take, uncons)
 import Data.Foldable (foldr)
 import Data.List (List(..))
@@ -119,11 +119,10 @@ divergingPaletteGenerators = nonEmpty $ cubehelixGenerators
   where
   cubehelixGenerators = do
     -- TODO make sure spaces do not overlap
-    -- TODO fix zero lightness
     hueShift <- hueShifts [0.0] [45.0, 90.0]
     sequentialGenerator <-
-      [ { hueShift, darknessRange: {min: 0.1, max: 0.3}, lightnessRange: {min: 0.90, max: 0.99} }
-      , { hueShift, darknessRange: {min: 0.2, max: 0.5}, lightnessRange: {min: 0.90, max: 0.99} }
+      [ { hueShift, darknessRange: {min: 0.1, max: 0.3}, lightnessRange: {min: 0.95, max: 1.0} }
+      , { hueShift, darknessRange: {min: 0.2, max: 0.5}, lightnessRange: {min: 0.95, max: 1.0} }
       ]
     secondaryHueShift <- [-135.0, -90.0, 90.0, 135.0, 180.0]
     pure $ DivergingGenerator
@@ -268,11 +267,11 @@ runDivergingGenerator n seed (DivergingGenerator spec) = (mkRunner scale) seed n
   scale = \color ->
     let
       hsl = Color.toHSLA color
-      start = reverseScale
+      start = reverseStops
         $ mkSequentialPalette spec.sequentialGenerator
         $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
       end = mkSequentialPalette spec.sequentialGenerator color
-    in start `combineScale 0.5` end
+    in start `combineStops 0.5` end
 
 sequentialToCSSGradient ::  Color -> SequentialGenerator -> CSS.BackgroundImage
 sequentialToCSSGradient seed g = mkGradient $ runSequentialGenerator 5 seed g
