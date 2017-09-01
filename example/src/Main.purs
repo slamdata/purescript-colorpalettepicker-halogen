@@ -1,6 +1,7 @@
 module Main where
 
 import Prelude
+import Debug.Trace
 
 import Color.Scheme.X11 (blue)
 import ColorPalettePicker.Halogen.Component as CPP
@@ -22,7 +23,7 @@ main = HA.runHalogenAff do
   runUI example unit body
 
 data Query a
-  = Query Unit a
+  = Query CPP.Message a
 
 type State = {}
 type ChildQuery = Coproduct.Coproduct1 CPP.Query
@@ -57,4 +58,6 @@ render _ = HH.div_
     , CPP.qualitativePaletteGeneratorGroup
     ]
 eval ∷ ∀ m. Query ~> DSL m
-eval (Query _ next) = pure next
+eval (Query msg next) = do
+  traceAnyA msg
+  pure next

@@ -23,6 +23,8 @@ module ColorPalettePicker.Halogen.Component
   , PaletteGeneratorGroupF(..)
   , Query(..)
   , Message(..)
+  , PaletteGeneratorIdx
+  , PaletteGeneratorGroupIdx
   , PickerEffects
   , sequentialPaletteGeneratorGroup
   , divergingPaletteGeneratorGroup
@@ -72,11 +74,18 @@ type State =
   }
 
 type Input = Unit
-type Message = Unit
+
+type PaletteGeneratorIdx = Int
+type PaletteGeneratorGroupIdx = Int
+data Message
+  = NewSeed Color
+  | PaletteGeneratorSelected PaletteGeneratorGroupIdx PaletteGeneratorIdx
+  | PaletteGeneratorGroupToggled PaletteGeneratorGroupIdx
+
 data Query next
   = PickerEvents CPicker.Message next
-  | ToggleGroup Int next
-  | SelectPalette Int Int next
+  | TogglePaletteGeneratorGroup PaletteGeneratorGroupIdx next
+  | SelectPaletteGenerator PaletteGeneratorGroupIdx PaletteGeneratorIdx next
 
 type ChildQuery = Coproduct.Coproduct1 CPicker.Query
 type Slot = Either.Either1 Unit
@@ -187,7 +196,7 @@ render state = HH.div [HP.class_ $ classes.root] $
               [ HP.class_ $ classes.paletteGeneratorGroupHeaderAction ]
               [ HH.a
                   [ HP.href "javascript:void(0)"
-                  , HE.onClick $ HE.input_ $ ToggleGroup groupIdx
+                  , HE.onClick $ HE.input_ $ TogglePaletteGeneratorGroup groupIdx
                   ]
                   [ HH.text $ if isOpen then "cancel" else "change" ]
               ]
@@ -200,7 +209,7 @@ render state = HH.div [HP.class_ $ classes.root] $
                   (activeIdx == idx)
                   (run state.seed generator)
                   (gradient state.seed generator)
-                  (SelectPalette groupIdx idx)
+                  (SelectPaletteGenerator groupIdx idx)
         else
           renderCompact (run state.seed activeGenerator) (gradient state.seed activeGenerator)
       ]
@@ -252,7 +261,7 @@ indexNEA (NonEmpty val arr) idx = index arr (idx - 1)
 
 eval ∷ ∀ m . Query ~> DSL m
 eval = case _ of
-  SelectPalette groupId paletteId next -> do
+  SelectPaletteGenerator groupId paletteId next -> do
     state <- H.get
     for_ (index state.groups groupId) $ runExists \(PaletteGeneratorGroupF g) ->
       let
@@ -261,19 +270,25 @@ eval = case _ of
           Just _ -> paletteId
         newGroup = mkExists $ PaletteGeneratorGroupF g{isOpen = false, activeIdx = focusedId}
         newGroups = updateAt groupId newGroup state.groups
-      in H.put state{groups = fromMaybe state.groups newGroups }
-
+      in do
+        H.put state{groups = fromMaybe state.groups newGroups }
+        H.raise $ PaletteGeneratorSelected groupId paletteId
     pure next
-  ToggleGroup groupId next -> do
+  TogglePaletteGeneratorGroup groupId next -> do
     state <- H.get
     for_ (index state.groups groupId) $ runExists \(PaletteGeneratorGroupF g) ->
       let
         newGroup = mkExists $ PaletteGeneratorGroupF g{isOpen = not g.isOpen}
         newGroups = updateAt groupId newGroup state.groups
-      in H.put state{groups = fromMaybe state.groups newGroups }
+      in do
+        H.put state{groups = fromMaybe state.groups newGroups }
+        H.raise $ PaletteGeneratorGroupToggled groupId
     pure next
   PickerEvents msg next -> do
-    case msg of
-      CPicker.NextChange seed -> H.modify _{seed = seed}
-      CPicker.NotifyChange seed -> H.modify _{seed = seed}
+    let
+      seed = case msg of
+        CPicker.NextChange seed -> seed
+        CPicker.NotifyChange seed -> seed
+    H.modify _{seed = seed}
+    H.raise $ NewSeed seed
     pure next
