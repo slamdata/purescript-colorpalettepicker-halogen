@@ -3,7 +3,6 @@ module Main where
 import Prelude
 
 import ColorPalettePicker.Halogen.Component as CPP
-import Compact.Halogen.Component as Compact
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.Monad.Eff (Eff)
 import Data.Either.Nested as Either
@@ -24,19 +23,14 @@ main = HA.runHalogenAff do
 
 data Query a
   = Query Unit a
-  | CompactQuery (Compact.Message CPP.Message) a
 
 type State = {}
-type CompactPickerQuery = Compact.Query CPP.Query CPP.Input CPP.Message
-type ChildQuery = Coproduct.Coproduct2 CPP.Query CompactPickerQuery
-type Slot = Either.Either2 Int Int
+type ChildQuery = Coproduct.Coproduct1 CPP.Query
+type Slot = Either.Either1 Int
 
 
 cpPicker ∷ CP.ChildPath CPP.Query ChildQuery Int Slot
 cpPicker = CP.cp1
-
-cpCompactColor ∷ CP.ChildPath CompactPickerQuery ChildQuery Int Slot
-cpCompactColor = CP.cp2
 
 
 type HTML m = H.ParentHTML Query ChildQuery Slot m
@@ -61,4 +55,3 @@ render _ = HH.div_
 
 eval ∷ ∀ m. Query ~> DSL m
 eval (Query _ next) = pure next
-eval (CompactQuery _ next) = pure next
