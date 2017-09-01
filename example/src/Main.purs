@@ -54,9 +54,9 @@ render _ = HH.div_
   ]
   where
   allGenerators =
-    [ CPP.sequentialPaletteGroup
-    , CPP.divergingPaletteGroup
-    , CPP.qualitativePaletteGroup
+    [ CPP.sequentialPaletteGenerators
+    , CPP.divergingPaletteGenerators
+    , CPP.qualitativePaletteGenerators
     ]
 eval ∷ ∀ m. Query ~> DSL m
 eval (Query _ next) = pure next

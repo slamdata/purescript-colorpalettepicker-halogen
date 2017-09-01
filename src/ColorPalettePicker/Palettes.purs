@@ -1,8 +1,5 @@
 module ColorPalettePicker.Utils.Palettes
-  ( Palette
-  , mkPalette
-
-  , SequentialGenerator(..)
+  ( SequentialGenerator(..)
   , SequentialGeneratorSpec
   , sequentialToCSSGradient
   , sequentialPaletteGenerators
@@ -37,16 +34,6 @@ import Data.Maybe (fromJust)
 import Data.NonEmpty (NonEmpty(..))
 import Math (abs, sqrt, (%))
 import Partial.Unsafe (unsafePartial)
-
-type Palette =
-  { seed :: Color
-  , sequential :: SequentialGenerator
-  , diverging :: DivergingGenerator
-  , qualitative :: QualitativeGenerator
-  }
-
-data PaletteType = Sequential | Diverging | Qualitative
-
 
 newtype SequentialGenerator = SequentialGenerator SequentialGeneratorSpec
 
@@ -88,19 +75,6 @@ derive instance qualitativeGeneratorOrd :: Ord QualitativeGenerator
 
 
 type PaletteRunner = Color -> Int -> Array Color
-
-mkPalette
-  :: Color
-  -> SequentialGenerator
-  -> DivergingGenerator
-  -> QualitativeGenerator
-  -> Palette
-mkPalette =
-  { seed: _
-  , sequential: _
-  , diverging: _
-  , qualitative: _
-  }
 
 sequentialPaletteGenerators :: NonEmpty Array SequentialGenerator
 sequentialPaletteGenerators = nonEmpty cubehelixGenerators
