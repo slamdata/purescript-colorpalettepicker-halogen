@@ -2,40 +2,24 @@ module ColorPalettePicker.Utils.PreScale where
 
 import Prelude
 
-import Color (Color)
-import Color as Color
-import Color.Scale as Scale
+import Color.Scale (ColorStops(..), colorStop, stopRatio, stopColor)
 import Data.List (List(..), reverse, (:))
 
-type PreScale = { start :: Color, stops :: List PreStop, end :: Color }
-type PreStop = { color :: Color, ratio :: Number }
 
-colorStop :: Color -> Number -> PreStop
-colorStop = { color: _, ratio: _ }
-
-
-mkScaleBuilder :: PreScale -> Scale.ColorStops
-mkScaleBuilder {start, stops, end} = Scale.ColorStops start (stops <#> \{color, ratio} -> Scale.colorStop color ratio) end
-
-mkScale :: Color.ColorSpace -> PreScale -> Scale.ColorScale
-mkScale space {start, stops, end} =
-  Scale.colorScale space start (stops <#> \{color, ratio} -> Scale.colorStop color ratio) end
-
-combineScale :: Number → PreScale → PreScale → PreScale
-combineScale at start end =
-  { start: start.start
-  , stops: startStops <> midStops <> endStops
-  , end: end.end
-  }
+combineScale :: Number → ColorStops → ColorStops → ColorStops
+combineScale at (ColorStops bStart bStops bEnd) (ColorStops eStart eStops eEnd) =
+  ColorStops bStart (startStops <> midStops <> endStops) eEnd
   where
   epsilon = 0.01
-  startStops = start.stops <#> \{ratio, color} -> colorStop color (ratio / (1.0 / at))
-  midStops = (colorStop start.end $ at - epsilon) : (colorStop end.start $ at + epsilon) : Nil
-  endStops = end.stops <#> \{ratio, color} -> colorStop color (at + ratio / (1.0 / (1.0 - at)))
+  startStops = bStops <#>
+    \stop -> colorStop (stopColor stop) (stopRatio stop / (1.0 / at))
+  midStops = (colorStop bEnd $ at - epsilon) : (colorStop eStart $ at + epsilon) : Nil
+  endStops = eStops <#>
+    \stop -> colorStop (stopColor stop) (at + stopRatio stop / (1.0 / (1.0 - at)))
 
-reverseScale :: PreScale → PreScale
-reverseScale {start, stops, end} =
-  { start:end
-  , stops: reverse stops <#> \{ratio, color} -> colorStop color (1.0 - ratio)
-  , end: start
-  }
+reverseScale :: ColorStops → ColorStops
+reverseScale (ColorStops start stops end) =
+  ColorStops end newStops start
+  where
+  newStops = reverse stops <#>
+    \stop -> colorStop (stopColor stop) (1.0 - stopRatio stop)

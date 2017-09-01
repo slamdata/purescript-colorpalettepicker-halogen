@@ -28,7 +28,7 @@ import Color (Color)
 import Color as Color
 import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (linear, quadratic)
-import ColorPalettePicker.Utils.PreScale (PreScale, combineScale, mkScaleBuilder, reverseScale)
+import ColorPalettePicker.Utils.PreScale (combineScale, reverseScale)
 import Data.Array (fromFoldable, intercalate, reverse, sortBy, take, uncons)
 import Data.Foldable (foldr)
 import Data.List (List(..))
@@ -108,7 +108,7 @@ sequentialPaletteGenerators = nonEmpty cubehelixGenerators
   cubehelixGenerators = do
     hueShift <- hueShifts [ 0.0] [ 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0, 360.0]
     [ SequentialGenerator { hueShift, darknessRange: {min: 0.1, max: 0.5}, lightnessRange: {min: 0.85, max: 0.97} }
-    , SequentialGenerator { hueShift, darknessRange: {min: 0.0, max: 0.2}, lightnessRange: {min: 0.92, max: 1.0} } 
+    , SequentialGenerator { hueShift, darknessRange: {min: 0.0, max: 0.2}, lightnessRange: {min: 0.92, max: 1.0} }
     ]
 
 hueShifts :: Array Number -> Array Number -> Array Number
@@ -258,12 +258,12 @@ runQualitativeGenerator n seedColor (QualitativeGenerator {colors}) =
 
 runSequentialGenerator :: Int -> Color -> SequentialGenerator -> Array Color
 runSequentialGenerator n seed (SequentialGenerator spec) =
-  (preScaleToGenerator $ mkSequentialPalette spec)
+  (mkRunner $ mkSequentialPalette spec)
   seed
   n
 
 runDivergingGenerator :: Int -> Color -> DivergingGenerator -> Array Color
-runDivergingGenerator n seed (DivergingGenerator spec) = (preScaleToGenerator scale) seed n
+runDivergingGenerator n seed (DivergingGenerator spec) = (mkRunner scale) seed n
   where
   scale = \color ->
     let
@@ -290,15 +290,15 @@ mkGradient :: Array Color -> CSS.BackgroundImage
 mkGradient colors = CSS.fromString
   $ "linear-gradient(to right, " <> intercalate ", " (map Color.cssStringHSLA colors) <> ")"
 
-preScaleToGenerator :: (Color -> PreScale) -> PaletteRunner
-preScaleToGenerator f c n = fromFoldable $ Scale.colors' (Scale.cubehelixSample $ mkScaleBuilder $ f c) n
+mkRunner :: (Color -> Scale.ColorStops) -> PaletteRunner
+mkRunner f c n = fromFoldable $ Scale.colors' (Scale.cubehelixSample $ f c) n
 
 
 mkSequentialPalette
   :: SequentialGeneratorSpec
   -> Color
-  -> PreScale
-mkSequentialPalette {hueShift, lightnessRange, darknessRange} inputColor = {start: startColor, stops, end: endColor}
+  -> Scale.ColorStops
+mkSequentialPalette {hueShift, lightnessRange, darknessRange} inputColor = Scale.ColorStops startColor stops endColor
   where
   input = Color.toHSLA inputColor
   endColor = Color.hsla
