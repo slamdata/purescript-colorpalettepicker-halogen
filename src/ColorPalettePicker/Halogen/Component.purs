@@ -19,14 +19,14 @@ module ColorPalettePicker.Halogen.Component
   ( picker
   , Input
   , State
-  , PaletteGenerators
-  , PaletteGeneratorsF(..)
+  , PaletteGeneratorGroup
+  , PaletteGeneratorGroupF(..)
   , Query(..)
   , Message(..)
   , PickerEffects
-  , sequentialPaletteGenerators
-  , divergingPaletteGenerators
-  , qualitativePaletteGenerators
+  , sequentialPaletteGeneratorGroup
+  , divergingPaletteGeneratorGroup
+  , qualitativePaletteGeneratorGroup
   )
   where
 
@@ -34,7 +34,6 @@ import Prelude
 
 import CSS as CSS
 import Color (Color)
-import Color as Color
 import ColorPalettePicker.Halogen.PickerLayout as PickerLayout
 import ColorPalettePicker.Utils.Palettes as Palettes
 import ColorPicker.Halogen.Component as CPicker
@@ -57,8 +56,8 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 
 
-type PaletteGenerators = Exists PaletteGeneratorsF
-newtype PaletteGeneratorsF a = PaletteGeneratorsF
+type PaletteGeneratorGroup = Exists PaletteGeneratorGroupF
+newtype PaletteGeneratorGroupF a = PaletteGeneratorGroupF
   { generators :: NonEmpty Array a
   , name :: String
   , activeIdx :: Int
@@ -69,14 +68,13 @@ newtype PaletteGeneratorsF a = PaletteGeneratorsF
 
 type State =
   { seed :: Color
-  , group :: Array PaletteGenerators
+  , groups :: Array PaletteGeneratorGroup
   }
 
 type Input = Unit
 type Message = Unit
 data Query next
   = PickerEvents CPicker.Message next
-  | Update (State -> State) next
   | ToggleGroup Int next
   | SelectPalette Int Int next
 
@@ -93,53 +91,51 @@ type PickerEffects r = CPicker.PickerEffects r
 
 classes ::
   { root :: H.ClassName
-  , paletteGroup :: H.ClassName
-  , hasGradient :: H.ClassName
+  , paletteGroups :: H.ClassName
   , isActive :: H.ClassName
+  , paletteGeneratorGroup :: H.ClassName
+  , paletteGeneratorGroupHeader :: H.ClassName
+  , paletteGeneratorGroupHeaderText :: H.ClassName
+  , paletteGeneratorGroupHeaderAction :: H.ClassName
+  , paletteGeneratorGroupList :: H.ClassName
+  , paletteGenerator :: H.ClassName
+  , paletteGeneratorActionable :: H.ClassName
+  , hasGradient :: H.ClassName
   , paletteGradient :: H.ClassName
   , palette :: H.ClassName
   , paletteColor :: H.ClassName
-  , paletteGenerators :: H.ClassName
-  , paletteGeneratorsHeader :: H.ClassName
-  , paletteGeneratorsHeaderText :: H.ClassName
-  , paletteGeneratorsHeaderAction :: H.ClassName
-  , paletteGeneratorsList :: H.ClassName
-  , paletteSelected :: H.ClassName
-  , paletteGenerator :: H.ClassName
-  , paletteGeneratorAction :: H.ClassName
   }
 classes =
   { root:  HH.ClassName "ColorSchemePicker"
-  , paletteGroup: HH.ClassName "ColorPalettePicker-paletteGroup"
-  , hasGradient: HH.ClassName "hasGradient"
+  , paletteGroups: HH.ClassName "ColorPalettePicker-paletteGroups"
   , isActive: HH.ClassName "isActive"
+  , paletteGeneratorGroup: HH.ClassName "ColorPalettePicker-paletteGeneratorGroup"
+  , paletteGeneratorGroupHeader: HH.ClassName "ColorPalettePicker-paletteGeneratorGroupHeader"
+  , paletteGeneratorGroupHeaderText: HH.ClassName "ColorPalettePicker-paletteGeneratorGroupHeaderText"
+  , paletteGeneratorGroupHeaderAction: HH.ClassName "ColorPalettePicker-paletteGeneratorGroupHeaderAction"
+  , paletteGeneratorGroupList: HH.ClassName "ColorPalettePicker-paletteGeneratorGroupList"
+  , paletteGenerator: HH.ClassName "ColorPalettePicker-paletteGenerator"
+  , paletteGeneratorActionable: HH.ClassName "ColorPalettePicker-paletteGenerator--actionable"
+  , hasGradient: HH.ClassName "hasGradient"
   , paletteGradient: HH.ClassName "ColorPalettePicker-paletteGradient"
   , palette: HH.ClassName "ColorPalettePicker-palette"
   , paletteColor: HH.ClassName "ColorPalettePicker-paletteColor"
-  , paletteGenerators: HH.ClassName "ColorPalettePicker-paletteGenerators"
-  , paletteGeneratorsHeader: HH.ClassName "ColorPalettePicker-paletteGeneratorsHeader"
-  , paletteGeneratorsHeaderText: HH.ClassName "ColorPalettePicker-paletteGeneratorsHeaderText"
-  , paletteGeneratorsHeaderAction: HH.ClassName "ColorPalettePicker-paletteGeneratorsHeaderAction"
-  , paletteGeneratorsList: HH.ClassName "ColorPalettePicker-paletteGeneratorsList"
-  , paletteSelected: HH.ClassName "ColorPalettePicker-paletteSelected"
-  , paletteGenerator: HH.ClassName "ColorPalettePicker-paletteGenerator"
-  , paletteGeneratorAction: HH.ClassName "ColorPalettePicker-paletteGenerator--action"
   }
 
 
-picker ∷ ∀ m r. Color -> Array PaletteGenerators -> MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
-picker seed group = H.parentComponent
+picker ∷ ∀ m r. Color -> Array PaletteGeneratorGroup -> MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
+picker seed groups = H.parentComponent
   { initialState: const $
       { seed
-      , group
+      , groups
       }
   , render: render
   , eval: eval
   , receiver: const Nothing
   }
 
-sequentialPaletteGenerators :: PaletteGenerators --  SequentialGenerator
-sequentialPaletteGenerators = mkExists $ PaletteGeneratorsF
+sequentialPaletteGeneratorGroup :: PaletteGeneratorGroup --  SequentialGenerator
+sequentialPaletteGeneratorGroup = mkExists $ PaletteGeneratorGroupF
   { name: "Sequential"
   , generators: Palettes.sequentialPaletteGenerators
   , activeIdx: 0
@@ -148,8 +144,8 @@ sequentialPaletteGenerators = mkExists $ PaletteGeneratorsF
   , gradient: \c p -> Just $ Palettes.sequentialToCSSGradient c p
   }
 
-divergingPaletteGenerators :: PaletteGenerators --  DivergingGenerator
-divergingPaletteGenerators = mkExists $ PaletteGeneratorsF
+divergingPaletteGeneratorGroup :: PaletteGeneratorGroup --  DivergingGenerator
+divergingPaletteGeneratorGroup = mkExists $ PaletteGeneratorGroupF
   { name: "Diverging"
   , generators: Palettes.divergingPaletteGenerators
   , activeIdx: 0
@@ -158,8 +154,8 @@ divergingPaletteGenerators = mkExists $ PaletteGeneratorsF
   , gradient: \c p -> Just $ Palettes.divergingToCSSGradient c p
   }
 
-qualitativePaletteGenerators :: PaletteGenerators --  QualitativeGenerator
-qualitativePaletteGenerators = mkExists $ PaletteGeneratorsF
+qualitativePaletteGeneratorGroup :: PaletteGeneratorGroup --  QualitativeGenerator
+qualitativePaletteGeneratorGroup = mkExists $ PaletteGeneratorGroupF
   { name: "Qualitative"
   , generators: Palettes.qualitativePaletteGenerators
   , activeIdx: 0
@@ -173,22 +169,22 @@ render ∷ ∀ m r. MonadAff (PickerEffects r) m => State → HTML m
 render state = HH.div [HP.class_ $ classes.root] $
   [ HH.slot' cpColor unit (CPicker.picker state.seed) PickerLayout.props $ HE.input PickerEvents
   , HH.div
-      [HP.class_ $ classes.paletteGroup] $
-        mapWithIndex (\idx -> runExists (renderGroup idx)) state.group
+      [HP.class_ $ classes.paletteGroups] $
+        mapWithIndex (\idx -> runExists (renderGroup idx)) state.groups
   ]
 
   where
-  renderGroup ∷ ∀ a. Int -> PaletteGeneratorsF a → HTML m
-  renderGroup groupIdx (PaletteGeneratorsF p@{isOpen, generators, run, gradient, name })=
+  renderGroup ∷ ∀ a. Int -> PaletteGeneratorGroupF a → HTML m
+  renderGroup groupIdx (PaletteGeneratorGroupF p@{isOpen, generators, run, gradient, name })=
     HH.div
-      [ HP.class_ $ classes.paletteGenerators]
+      [ HP.class_ $ classes.paletteGeneratorGroup]
       [ HH.div
-          [ HP.class_ $ classes.paletteGeneratorsHeader ]
+          [ HP.class_ $ classes.paletteGeneratorGroupHeader ]
           [ HH.div
-              [ HP.class_ $ classes.paletteGeneratorsHeaderText ]
+              [ HP.class_ $ classes.paletteGeneratorGroupHeaderText ]
               [ HH.text $ name <> " Palette" ]
           , HH.div
-              [ HP.class_ $ classes.paletteGeneratorsHeaderAction ]
+              [ HP.class_ $ classes.paletteGeneratorGroupHeaderAction ]
               [ HH.a
                   [ HP.href "javascript:void(0)"
                   , HE.onClick $ HE.input_ $ ToggleGroup groupIdx
@@ -198,7 +194,7 @@ render state = HH.div [HP.class_ $ classes.root] $
           ]
       , if isOpen then
           HH.div
-            [ HP.class_ $ classes.paletteGeneratorsList ]
+            [ HP.class_ $ classes.paletteGeneratorGroupList ]
             $ flip mapWithIndex (fromNonEmpty cons generators) \idx generator ->
                 renderPalette
                   (activeIdx == idx)
@@ -215,7 +211,7 @@ render state = HH.div [HP.class_ $ classes.root] $
   renderCompact palette cssGradient =
     HH.div
       [ HP.classes $
-          [ classes.paletteSelected]
+          [ classes.paletteGenerator ]
           <> hasGradientClasses cssGradient
       ]
       $ renderPaletteChildren palette cssGradient
@@ -224,7 +220,7 @@ render state = HH.div [HP.class_ $ classes.root] $
     HH.a
       [ HP.classes
           $ [ classes.paletteGenerator
-            , classes.paletteGeneratorAction
+            , classes.paletteGeneratorActionable
             ]
           <> hasGradientClasses cssGradient
           <> isActivetoClasses isActive
@@ -258,26 +254,23 @@ eval ∷ ∀ m . Query ~> DSL m
 eval = case _ of
   SelectPalette groupId paletteId next -> do
     state <- H.get
-    for_ (index state.group groupId) $ runExists \(PaletteGeneratorsF g) ->
+    for_ (index state.groups groupId) $ runExists \(PaletteGeneratorGroupF g) ->
       let
         focusedId = case indexNEA g.generators paletteId of
           Nothing -> 0
           Just _ -> paletteId
-        newGroup = mkExists $ PaletteGeneratorsF g{isOpen = false, activeIdx = focusedId}
-        newGroups = updateAt groupId newGroup state.group
-      in H.put state{group = fromMaybe state.group newGroups }
+        newGroup = mkExists $ PaletteGeneratorGroupF g{isOpen = false, activeIdx = focusedId}
+        newGroups = updateAt groupId newGroup state.groups
+      in H.put state{groups = fromMaybe state.groups newGroups }
 
     pure next
   ToggleGroup groupId next -> do
     state <- H.get
-    for_ (index state.group groupId) $ runExists \(PaletteGeneratorsF g) ->
+    for_ (index state.groups groupId) $ runExists \(PaletteGeneratorGroupF g) ->
       let
-        newGroup = mkExists $ PaletteGeneratorsF g{isOpen = not g.isOpen}
-        newGroups = updateAt groupId newGroup state.group
-      in H.put state{group = fromMaybe state.group newGroups }
-    pure next
-  Update modify next -> do
-    H.modify modify
+        newGroup = mkExists $ PaletteGeneratorGroupF g{isOpen = not g.isOpen}
+        newGroups = updateAt groupId newGroup state.groups
+      in H.put state{groups = fromMaybe state.groups newGroups }
     pure next
   PickerEvents msg next -> do
     case msg of
