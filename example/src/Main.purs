@@ -48,10 +48,15 @@ example = H.parentComponent
 render ∷ ∀ m r. MonadAff (CPP.PickerEffects r) m => State → HTML m
 render _ = HH.div_
   [ HH.h1_ [ HH.text "Picker 0" ]
-  , HH.slot' cpPicker 0 (CPP.input) unit (HE.input Query)
+  , HH.slot' cpPicker 0 (CPP.input allGenerators) unit (HE.input Query)
   -- , HH.h1_ [ HH.text "Picker 1" ]
   -- , HH.slot' cpPicker 1 (CPP.input) unit (HE.input Query)
   ]
-
+  where
+  allGenerators =
+    [ CPP.sequentialPaletteGroup
+    , CPP.divergingPaletteGroup
+    , CPP.qualitativePaletteGroup
+    ]
 eval ∷ ∀ m. Query ~> DSL m
 eval (Query _ next) = pure next

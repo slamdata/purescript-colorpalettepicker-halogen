@@ -16,13 +16,15 @@
 
 
 module ColorPalettePicker.Halogen.Component
-  ( input
-  , Input
-  , State
-  , Query(..)
-  , Message(..)
-  , PickerEffects
-  )
+  -- ( input
+  -- , Input
+  -- , State
+  -- , PaletteGroup
+  -- , PaletteGroupF(..)
+  -- , Query(..)
+  -- , Message(..)
+  -- , PickerEffects
+  -- )
   where
 
 import Prelude
@@ -31,17 +33,19 @@ import CSS as CSS
 import Color (Color)
 import Color as Color
 import ColorPalettePicker.Halogen.PickerLayout as PickerLayout
-import ColorPalettePicker.Utils.Palettes (DivergingGenerator, QualitativeGenerator, SequentialGenerator, divergingPaletteGenerators, divergingToCSSGradient, qualitativePaletteGenerators, runDivergingGenerator, runQualitativeGenerator, runSequentialGenerator, sequentialPaletteGenerators, sequentialToCSSGradient)
+import ColorPalettePicker.Utils.Palettes (divergingPaletteGenerators, divergingToCSSGradient, qualitativePaletteGenerators, runDivergingGenerator, runQualitativeGenerator, runSequentialGenerator, sequentialPaletteGenerators, sequentialToCSSGradient)
 import ColorPicker.Halogen.Component as CPicker
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.MonadZero (guard)
 import Control.Plus (empty)
-import Data.Array (cons)
+import Data.Array (cons, index, updateAt)
 import Data.Either.Nested as Either
+import Data.Exists (Exists, mkExists, runExists)
+import Data.Foldable (for_)
 import Data.Functor.Coproduct.Nested as Coproduct
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Maybe (Maybe(..), isJust, maybe)
-import Data.NonEmpty (NonEmpty, fromNonEmpty, head)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.NonEmpty (NonEmpty(..), fromNonEmpty, head)
 import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
@@ -50,29 +54,28 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 
 
+type PaletteGroup = Exists PaletteGroupF
+newtype PaletteGroupF a = PaletteGroupF
+  { generators :: NonEmpty Array a
+  , name :: String
+  , activeIdx :: Int
+  , isOpen :: Boolean
+  , run :: Color → a → Array Color
+  , gradient :: Color → a → Maybe CSS.BackgroundImage
+  }
+
 type State =
   { seed :: Color
-  , sequential ::
-      { idx :: Int
-      , generator :: SequentialGenerator
-      , isOpen :: Boolean
-      }
-  , diverging ::
-      { idx :: Int
-      , generator :: DivergingGenerator
-      , isOpen :: Boolean
-      }
-  , qualitative ::
-      { idx :: Int
-      , generator :: QualitativeGenerator
-      , isOpen :: Boolean
-      }
+  , groups :: Array PaletteGroup
   }
+
 type Input = Unit
 type Message = Unit
 data Query next
   = PickerEvents CPicker.Message next
   | Update (State -> State) next
+  | ToggleGroup Int next
+  | SelectPalette Int Int next
 
 type ChildQuery = Coproduct.Coproduct1 CPicker.Query
 type Slot = Either.Either1 Unit
@@ -121,78 +124,59 @@ classes =
   }
 
 
-input ∷ ∀ m r. MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
-input = H.parentComponent
+input ∷ ∀ m r. Array PaletteGroup -> MonadAff (PickerEffects r) m => H.Component HH.HTML Query Input Message m
+input groups = H.parentComponent
   { initialState: const $
       { seed: Color.hsl 0.0 1.0 0.5
-      , sequential:
-          { idx: 0
-          , generator: head sequentialPaletteGenerators
-          , isOpen: false
-          }
-      , diverging:
-          { idx: 0
-          , generator: head divergingPaletteGenerators
-          , isOpen: false
-          }
-      , qualitative:
-          { idx: 0
-          , generator: head qualitativePaletteGenerators
-          , isOpen: false
-          }
+      , groups
       }
   , render: render
   , eval: eval
   , receiver: const Nothing
   }
 
+sequentialPaletteGroup :: PaletteGroup --  SequentialGenerator
+sequentialPaletteGroup = mkExists $ PaletteGroupF
+  { name: "Sequential"
+  , generators: sequentialPaletteGenerators
+  , activeIdx: 0
+  , isOpen: false
+  , run: runSequentialGenerator 16
+  , gradient: \c p -> Just $ sequentialToCSSGradient c p
+  }
+
+divergingPaletteGroup :: PaletteGroup --  DivergingGenerator
+divergingPaletteGroup = mkExists $ PaletteGroupF
+  { name: "Diverging"
+  , generators: divergingPaletteGenerators
+  , activeIdx: 0
+  , isOpen: false
+  , run: runDivergingGenerator 27
+  , gradient: \c p -> Just $ divergingToCSSGradient c p
+  }
+
+qualitativePaletteGroup :: PaletteGroup --  QualitativeGenerator
+qualitativePaletteGroup = mkExists $ PaletteGroupF
+  { name: "Qualitative"
+  , generators: qualitativePaletteGenerators
+  , activeIdx: 0
+  , isOpen: false
+  , run: runQualitativeGenerator 12
+  , gradient: \_ _ -> Nothing
+  }
+
+
 render ∷ ∀ m r. MonadAff (PickerEffects r) m => State → HTML m
 render state = HH.div [HP.class_ $ classes.root] $
   [ HH.slot' cpColor unit CPicker.picker PickerLayout.props $ HE.input PickerEvents
   , HH.div
-    [HP.class_ $ classes.paletteGroups]
-    [ renderGroup
-        state.sequential.idx
-        state.sequential.isOpen
-        state.sequential.generator
-        (runSequentialGenerator 16 state.seed)
-        (sequentialToCSSGradient state.seed >>> Just)
-        (\s -> s{sequential{isOpen = not s.sequential.isOpen}})
-        (\idx generator s → s{sequential{ isOpen = false, idx = idx, generator = generator }})
-        sequentialPaletteGroup
-    , renderGroup
-        state.diverging.idx
-        state.diverging.isOpen
-        state.diverging.generator
-        (runDivergingGenerator 27 state.seed)
-        (divergingToCSSGradient state.seed >>> Just)
-        (\s -> s{diverging{isOpen = not s.diverging.isOpen}})
-        (\idx generator s → s{diverging{ isOpen = false, idx = idx, generator = generator }})
-        divergingPaletteGroup
-    , renderGroup
-        state.qualitative.idx
-        state.qualitative.isOpen
-        state.qualitative.generator
-        (runQualitativeGenerator 12 state.seed)
-        (const Nothing)
-        (\s -> s{qualitative{isOpen = not s.qualitative.isOpen}})
-        (\idx generator s → s{qualitative{ isOpen = false, idx = idx, generator = generator }})
-        qualitativePaletteGroup
-    ]
+      [HP.class_ $ classes.paletteGroups] $
+        mapWithIndex (\idx -> runExists (renderGroup idx)) state.groups
   ]
 
   where
-  renderGroup ∷ ∀ a
-    . Int
-    → Boolean
-    → a
-    → (a → Array Color)
-    → (a → Maybe CSS.BackgroundImage)
-    → (State → State)
-    → (Int → a → State → State)
-    → PaletteGroup a
-    → HTML m
-  renderGroup activeIdx isOpen activeGenerator run gradient toggle update { name, generators } =
+  renderGroup ∷ ∀ a. Int -> PaletteGroupF a → HTML m
+  renderGroup groupIdx (PaletteGroupF p@{isOpen, generators, run, gradient, name })=
     HH.div
       [ HP.class_ $ classes.paletteGroup]
       [ HH.div
@@ -204,7 +188,7 @@ render state = HH.div [HP.class_ $ classes.root] $
               [ HP.class_ $ classes.paletteGroupHeaderAction ]
               [ HH.a
                   [ HP.href "javascript:void(0)"
-                  , HE.onClick $ HE.input_ $ Update toggle
+                  , HE.onClick $ HE.input_ $ ToggleGroup groupIdx
                   ]
                   [ HH.text $ if isOpen then "cancel" else "change" ]
               ]
@@ -213,10 +197,18 @@ render state = HH.div [HP.class_ $ classes.root] $
           HH.div
             [ HP.class_ $ classes.paletteGroupList ]
             $ flip mapWithIndex (fromNonEmpty cons generators) \idx generator ->
-                renderPalette (activeIdx == idx) (run generator) (gradient generator) (update idx generator)
+                renderPalette
+                  (activeIdx == idx)
+                  (run state.seed generator)
+                  (gradient state.seed generator)
+                  (SelectPalette groupIdx idx)
         else
-          renderCompact (run activeGenerator) (gradient activeGenerator)
+          renderCompact (run state.seed activeGenerator) (gradient state.seed activeGenerator)
       ]
+    where
+    activeGenerator' = indexNEA generators p.activeIdx
+    activeGenerator = fromMaybe (head generators) activeGenerator'
+    activeIdx = maybe 0 (const p.activeIdx) activeGenerator'
   renderCompact palette cssGradient =
     HH.div
       [ HP.classes $
@@ -225,7 +217,7 @@ render state = HH.div [HP.class_ $ classes.root] $
       ]
       $ renderPaletteChildren palette cssGradient
 
-  renderPalette isActive palette cssGradient update =
+  renderPalette isActive palette cssGradient action =
     HH.a
       [ HP.classes
           $ [ classes.paletteGroupItem
@@ -233,7 +225,7 @@ render state = HH.div [HP.class_ $ classes.root] $
             ]
           <> hasGradientClasses cssGradient
           <> isActivetoClasses isActive
-      , HE.onClick $  HE.input_ $ Update update
+      , HE.onClick $ HE.input_ $ action
       , HP.href "javascript:void(0)"
       ]
       $ renderPaletteChildren palette cssGradient
@@ -254,11 +246,33 @@ render state = HH.div [HP.class_ $ classes.root] $
         ] []
     ] <> gradientToHTML cssGradient
 
-
+indexNEA :: ∀ a. NonEmpty Array a -> Int -> Maybe a
+indexNEA (NonEmpty val arr) 0 = pure val
+indexNEA (NonEmpty val arr) idx = index arr (idx - 1)
 
 
 eval ∷ ∀ m . Query ~> DSL m
 eval = case _ of
+  SelectPalette groupId paletteId next -> do
+    state <- H.get
+    for_ (index state.groups groupId) $ runExists \(PaletteGroupF g) ->
+      let
+        focusedId = case indexNEA g.generators paletteId of
+          Nothing -> 0
+          Just _ -> paletteId
+        newGroup = mkExists $ PaletteGroupF g{isOpen = false, activeIdx = focusedId}
+        newGroups = updateAt groupId newGroup state.groups
+      in H.put state{groups = fromMaybe state.groups newGroups }
+
+    pure next
+  ToggleGroup groupId next -> do
+    state <- H.get
+    for_ (index state.groups groupId) $ runExists \(PaletteGroupF g) ->
+      let
+        newGroup = mkExists $ PaletteGroupF g{isOpen = not g.isOpen}
+        newGroups = updateAt groupId newGroup state.groups
+      in H.put state{groups = fromMaybe state.groups newGroups }
+    pure next
   Update modify next -> do
     H.modify modify
     pure next
@@ -267,24 +281,3 @@ eval = case _ of
       CPicker.NextChange seed -> H.modify _{seed = seed}
       CPicker.NotifyChange seed -> H.modify _{seed = seed}
     pure next
-
-
-type PaletteGroup a = { name ∷ String, generators ∷ NonEmpty Array a }
-
-sequentialPaletteGroup :: PaletteGroup SequentialGenerator
-sequentialPaletteGroup =
-  { name: "Sequential"
-  , generators: sequentialPaletteGenerators
-  }
-
-divergingPaletteGroup :: PaletteGroup DivergingGenerator
-divergingPaletteGroup =
-  { name: "Diverging"
-  , generators: divergingPaletteGenerators
-  }
-
-qualitativePaletteGroup :: PaletteGroup QualitativeGenerator
-qualitativePaletteGroup =
-  { name: "Qualitative"
-  , generators: qualitativePaletteGenerators
-  }
