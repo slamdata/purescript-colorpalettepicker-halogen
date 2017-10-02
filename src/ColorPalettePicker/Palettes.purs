@@ -216,9 +216,9 @@ runQualitativeGenerator n seedColor (QualitativeGenerator {colors}) =
     → Number
   hslDistance a b = sqrt $ sqr (hueDistance a_h b_h) + sqr (a_s - b_s)  + sqr (a_l - b_l)
     where
-    hueDistance a b = d'/ 1.8
+    hueDistance a' b' = d'/ 1.8
       where
-      d = abs (a - b)
+      d = abs (a' - b')
       d' = if d < 180.0 then d else 360.0 - d
     a_h = a.h
     b_h = b.h
