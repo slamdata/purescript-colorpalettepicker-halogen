@@ -25,7 +25,6 @@ import Color (Color)
 import Color as Color
 import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (linear, quadratic)
-import ColorPalettePicker.Utils.PreScale (combineStops, reverseStops)
 import Data.Array (fromFoldable, intercalate, reverse, sortBy, take, uncons)
 import Data.Foldable (foldr)
 import Data.List (List(..))
@@ -241,11 +240,11 @@ runDivergingGenerator n seed (DivergingGenerator spec) = (mkRunner scale) seed n
   scale = \color ->
     let
       hsl = Color.toHSLA color
-      start = reverseStops
+      start = Color.reverseStops
         $ mkSequentialPalette spec.sequentialGenerator
         $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
       end = mkSequentialPalette spec.sequentialGenerator color
-    in start `combineStops 0.5` end
+    in start `Color.combineStops 0.5` end
 
 sequentialToCSSGradient ::  Color -> SequentialGenerator -> CSS.BackgroundImage
 sequentialToCSSGradient seed g = mkGradient $ runSequentialGenerator 5 seed g
