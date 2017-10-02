@@ -240,11 +240,11 @@ runDivergingGenerator n seed (DivergingGenerator spec) = (mkRunner scale) seed n
   scale = \color ->
     let
       hsl = Color.toHSLA color
-      start = Color.reverseStops
+      start = Scale.reverseStops
         $ mkSequentialPalette spec.sequentialGenerator
         $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
       end = mkSequentialPalette spec.sequentialGenerator color
-    in start `Color.combineStops 0.5` end
+    in start `Scale.combineStops 0.5` end
 
 sequentialToCSSGradient ::  Color -> SequentialGenerator -> CSS.BackgroundImage
 sequentialToCSSGradient seed g = mkGradient $ runSequentialGenerator 5 seed g
