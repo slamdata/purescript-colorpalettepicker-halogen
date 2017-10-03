@@ -25,12 +25,14 @@ import Color (Color)
 import Color as Color
 import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (linear, quadratic)
-import Data.Array (fromFoldable, intercalate, reverse, sortBy, take, uncons)
+import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
 import Data.Foldable (foldr)
 import Data.List (List(..))
 import Data.List as List
+import Data.List.NonEmpty as NEL
+import Data.List.Types (NonEmptyList)
 import Data.Maybe (fromJust)
-import Data.NonEmpty (NonEmpty(..))
+import Data.Newtype (class Newtype)
 import Math (abs, sqrt, (%))
 import Partial.Unsafe (unsafePartial)
 
@@ -42,8 +44,7 @@ type SequentialGeneratorSpec =
   , lightnessRange :: { min :: Number, max :: Number }
   }
 
-
-
+derive instance sequentialGeneratorNewType ∷ Newtype SequentialGenerator _
 derive instance sequentialGeneratorEq :: Eq SequentialGenerator
 derive instance sequentialGeneratorOrd :: Ord SequentialGenerator
 
@@ -55,6 +56,7 @@ type DivergingGeneratorSpec =
   , startColorHueShift :: Number
   }
 
+derive instance divergingGeneratorNewType ∷ Newtype DivergingGenerator _
 derive instance divergingGeneratorEq :: Eq DivergingGenerator
 derive instance divergingGeneratorOrd :: Ord DivergingGenerator
 
@@ -66,17 +68,19 @@ type QualitativeGeneratorSpec =
 
 newtype ColorHSL = ColorHSL { h :: Number, s :: Number, l :: Number }
 
+derive instance colorHSLNewType ∷ Newtype ColorHSL _
 derive instance colorHSLEq :: Eq ColorHSL
 derive instance colorHSLOrd :: Ord ColorHSL
 
+derive instance qualitativeGeneratorNewType ∷ Newtype QualitativeGenerator _
 derive instance qualitativeGeneratorEq :: Eq QualitativeGenerator
 derive instance qualitativeGeneratorOrd :: Ord QualitativeGenerator
 
 
 type PaletteRunner = Color -> Int -> Array Color
 
-sequentialPaletteGenerators :: NonEmpty Array SequentialGenerator
-sequentialPaletteGenerators = nonEmpty cubehelixGenerators
+sequentialPaletteGenerators :: NonEmptyList SequentialGenerator
+sequentialPaletteGenerators = unsafeNonEmpty cubehelixGenerators
   where
   cubehelixGenerators = do
     hueShift <- hueShifts [ 0.0] [ 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0, 360.0]
@@ -87,8 +91,8 @@ sequentialPaletteGenerators = nonEmpty cubehelixGenerators
 hueShifts :: Array Number -> Array Number -> Array Number
 hueShifts mid hues = reverse hues <> mid <> map (_ * -1.0) hues
 
-divergingPaletteGenerators :: NonEmpty Array DivergingGenerator
-divergingPaletteGenerators = nonEmpty $ cubehelixGenerators
+divergingPaletteGenerators :: NonEmptyList DivergingGenerator
+divergingPaletteGenerators = unsafeNonEmpty $ cubehelixGenerators
   where
   cubehelixGenerators = do
     -- TODO make sure spaces do not overlap
@@ -102,8 +106,8 @@ divergingPaletteGenerators = nonEmpty $ cubehelixGenerators
       { sequentialGenerator
       , startColorHueShift: secondaryHueShift
       }
-qualitativePaletteGenerators :: NonEmpty Array QualitativeGenerator
-qualitativePaletteGenerators = nonEmpty $ map
+qualitativePaletteGenerators :: NonEmptyList QualitativeGenerator
+qualitativePaletteGenerators = unsafeNonEmpty $ map
   ({colors: _} >>> QualitativeGenerator)
   [ [ hsl 0.0     0.0     0.4
     , hsl 24.29   0.785   0.4196
@@ -252,11 +256,8 @@ sequentialToCSSGradient seed g = mkGradient $ runSequentialGenerator 5 seed g
 divergingToCSSGradient :: Color -> DivergingGenerator -> CSS.BackgroundImage
 divergingToCSSGradient seed g = mkGradient $ runDivergingGenerator 10 seed g
 
-
-nonEmpty :: ∀ a. Array a -> NonEmpty Array a
-nonEmpty arr =
-  let {head, tail} = (unsafePartial $ fromJust $ uncons arr)
-  in NonEmpty head tail
+unsafeNonEmpty :: Array ~> NonEmptyList
+unsafeNonEmpty arr = unsafePartial $ fromJust $ NEL.fromFoldable arr
 
 mkGradient :: Array Color -> CSS.BackgroundImage
 mkGradient colors = CSS.fromString

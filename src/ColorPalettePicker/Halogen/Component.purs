@@ -42,14 +42,15 @@ import ColorPicker.Halogen.Component as CPicker
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.MonadZero (guard)
 import Control.Plus (empty)
-import Data.Array (cons, fromFoldable, index, updateAt)
+import Data.Array (fromFoldable, index, updateAt)
 import Data.Either.Nested as Either
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (for_)
 import Data.Functor.Coproduct.Nested as Coproduct
 import Data.FunctorWithIndex (mapWithIndex)
+import Data.List.Types (NonEmptyList)
+import Data.List.NonEmpty as NEL
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
-import Data.NonEmpty (NonEmpty(..), fromNonEmpty, head)
 import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
@@ -60,7 +61,7 @@ import Halogen.HTML.Properties as HP
 
 type PaletteGeneratorGroup = Exists PaletteGeneratorGroupF
 newtype PaletteGeneratorGroupF a = PaletteGeneratorGroupF
-  { generators :: NonEmpty Array a
+  { generators :: NonEmptyList a
   , name :: String
   , activeIdx :: Int
   , isOpen :: Boolean
@@ -135,7 +136,7 @@ classes =
 picker ∷ ∀ m r
   . MonadAff (PickerEffects r) m
   ⇒ Color
-  → NonEmpty Array PaletteGeneratorGroup
+  → NonEmptyList PaletteGeneratorGroup
   → H.Component HH.HTML Query Input Message m
 picker seed groups = H.parentComponent
   { initialState: const $
@@ -208,7 +209,7 @@ render state = HH.div [HP.class_ $ classes.root] $
       , if isOpen then
           HH.div
             [ HP.class_ $ classes.paletteGeneratorGroupList ]
-            $ flip mapWithIndex (fromNonEmpty cons generators) \idx generator →
+            $ flip mapWithIndex (fromFoldable generators) \idx generator →
                 renderPalette
                   (activeIdx == idx)
                   (run state.seed generator)
@@ -218,8 +219,8 @@ render state = HH.div [HP.class_ $ classes.root] $
           renderCompact (run state.seed activeGenerator) (gradient state.seed activeGenerator)
       ]
     where
-    activeGenerator' = indexNEA generators p.activeIdx
-    activeGenerator = fromMaybe (head generators) activeGenerator'
+    activeGenerator' = NEL.index generators p.activeIdx
+    activeGenerator = fromMaybe (NEL.head generators) activeGenerator'
     activeIdx = maybe 0 (const p.activeIdx) activeGenerator'
   renderCompact palette cssGradient =
     HH.div
@@ -258,18 +259,13 @@ render state = HH.div [HP.class_ $ classes.root] $
         ] []
     ] <> gradientToHTML cssGradient
 
-indexNEA :: ∀ a. NonEmpty Array a → Int → Maybe a
-indexNEA (NonEmpty val arr) 0 = pure val
-indexNEA (NonEmpty val arr) idx = index arr (idx - 1)
-
-
 eval ∷ ∀ m . Query ~> DSL m
 eval = case _ of
   SelectPaletteGenerator groupId paletteId next → do
     state <- H.get
     for_ (index state.groups groupId) $ runExists \(PaletteGeneratorGroupF g) →
       let
-        focusedId = case indexNEA g.generators paletteId of
+        focusedId = case NEL.index g.generators paletteId of
           Nothing → 0
           Just _ → paletteId
         newGroup = mkExists $ PaletteGeneratorGroupF g{isOpen = false, activeIdx = focusedId}

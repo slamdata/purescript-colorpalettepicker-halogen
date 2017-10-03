@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude
-import Debug.Trace
+import Debug.Trace (traceAnyA)
 
 import Color.Scheme.X11 (blue)
 import ColorPalettePicker.Halogen.Component as CPP
@@ -9,13 +9,15 @@ import Control.Monad.Aff.Class (class MonadAff)
 import Control.Monad.Eff (Eff)
 import Data.Either.Nested as Either
 import Data.Functor.Coproduct.Nested as Coproduct
-import Data.Maybe (Maybe(..))
+import Data.List.NonEmpty (fromFoldable)
+import Data.Maybe (Maybe(..), fromJust)
 import Halogen as H
 import Halogen.Aff as HA
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.VDom.Driver (runUI)
+import Partial.Unsafe (unsafePartial)
 
 main ∷ Eff (HA.HalogenEffects ()) Unit
 main = HA.runHalogenAff do
@@ -52,7 +54,7 @@ render _ = HH.div_
   , HH.slot' cpPicker 0 (CPP.picker blue allGenerators) unit (HE.input Query)
   ]
   where
-  allGenerators =
+  allGenerators = unsafePartial $ fromJust $ fromFoldable
     [ CPP.sequentialPaletteGeneratorGroup
     , CPP.divergingPaletteGeneratorGroup
     , CPP.qualitativePaletteGeneratorGroup
