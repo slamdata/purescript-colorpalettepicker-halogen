@@ -1,6 +1,7 @@
 module ColorPalettePicker.Utils.Palettes
   ( SequentialGenerator(..)
   , SequentialGeneratorSpec
+  , Range
   , sequentialToCSSGradient
   , sequentialPaletteGenerators
   , runSequentialGenerator
@@ -27,6 +28,8 @@ import Color.Scale as Scale
 import ColorPalettePicker.Utils.Easing (linear, quadratic)
 import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
 import Data.Foldable (foldr)
+import Data.Generic.Rep (class Generic)
+import Data.Generic.Rep.Show (genericShow)
 import Data.List (List(..))
 import Data.List as List
 import Data.List.NonEmpty as NEL
@@ -40,25 +43,40 @@ newtype SequentialGenerator = SequentialGenerator SequentialGeneratorSpec
 
 type SequentialGeneratorSpec =
   { hueShift :: Number
-  , darknessRange :: { min :: Number, max :: Number }
-  , lightnessRange :: { min :: Number, max :: Number }
+  , darknessRange :: Range
+  , lightnessRange :: Range
   }
 
 derive instance sequentialGeneratorNewType ∷ Newtype SequentialGenerator _
 derive instance sequentialGeneratorEq :: Eq SequentialGenerator
 derive instance sequentialGeneratorOrd :: Ord SequentialGenerator
+derive instance sequentialGeneratorGeneric :: Generic SequentialGenerator _
+instance sequentialGeneratorShow :: Show SequentialGenerator where
+  show = genericShow
+
+newtype Range = Range { min :: Number, max :: Number }
+
+derive instance rangeNewType ∷ Newtype Range _
+derive instance rangeEq :: Eq Range
+derive instance rangeOrd :: Ord Range
+derive instance rangeGeneric :: Generic Range _
+instance rangeShow :: Show Range where
+  show = genericShow
 
 
 newtype DivergingGenerator = DivergingGenerator DivergingGeneratorSpec
 
 type DivergingGeneratorSpec =
-  { sequentialGenerator :: SequentialGeneratorSpec
+  { sequentialGenerator :: SequentialGenerator
   , startColorHueShift :: Number
   }
 
 derive instance divergingGeneratorNewType ∷ Newtype DivergingGenerator _
 derive instance divergingGeneratorEq :: Eq DivergingGenerator
 derive instance divergingGeneratorOrd :: Ord DivergingGenerator
+derive instance divergingGeneratorGeneric :: Generic DivergingGenerator _
+instance divergingGeneratorShow :: Show DivergingGenerator where
+  show = genericShow
 
 
 newtype QualitativeGenerator = QualitativeGenerator QualitativeGeneratorSpec
@@ -71,10 +89,16 @@ newtype ColorHSL = ColorHSL { h :: Number, s :: Number, l :: Number }
 derive instance colorHSLNewType ∷ Newtype ColorHSL _
 derive instance colorHSLEq :: Eq ColorHSL
 derive instance colorHSLOrd :: Ord ColorHSL
+derive instance colorHSLGeneric :: Generic ColorHSL _
+instance colorHSLShow :: Show ColorHSL where
+  show = genericShow
 
 derive instance qualitativeGeneratorNewType ∷ Newtype QualitativeGenerator _
 derive instance qualitativeGeneratorEq :: Eq QualitativeGenerator
 derive instance qualitativeGeneratorOrd :: Ord QualitativeGenerator
+derive instance qualitativeGeneratorGeneric :: Generic QualitativeGenerator _
+instance qualitativeGeneratorShow :: Show QualitativeGenerator where
+  show = genericShow
 
 
 type PaletteRunner = Color -> Int -> Array Color
@@ -84,8 +108,8 @@ sequentialPaletteGenerators = unsafeNonEmpty cubehelixGenerators
   where
   cubehelixGenerators = do
     hueShift <- hueShifts [ 0.0] [ 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0, 360.0]
-    [ SequentialGenerator { hueShift, darknessRange: {min: 0.1, max: 0.5}, lightnessRange: {min: 0.85, max: 0.97} }
-    , SequentialGenerator { hueShift, darknessRange: {min: 0.0, max: 0.2}, lightnessRange: {min: 0.92, max: 1.0} }
+    [ SequentialGenerator { hueShift, darknessRange: Range {min: 0.1, max: 0.5}, lightnessRange: Range {min: 0.85, max: 0.97} }
+    , SequentialGenerator { hueShift, darknessRange: Range {min: 0.0, max: 0.2}, lightnessRange: Range {min: 0.92, max: 1.0} }
     ]
 
 hueShifts :: Array Number -> Array Number -> Array Number
@@ -98,8 +122,8 @@ divergingPaletteGenerators = unsafeNonEmpty $ cubehelixGenerators
     -- TODO make sure spaces do not overlap
     hueShift <- hueShifts [0.0] [45.0, 90.0]
     sequentialGenerator <-
-      [ { hueShift, darknessRange: {min: 0.1, max: 0.3}, lightnessRange: {min: 0.95, max: 1.0} }
-      , { hueShift, darknessRange: {min: 0.2, max: 0.5}, lightnessRange: {min: 0.95, max: 1.0} }
+      [ SequentialGenerator { hueShift, darknessRange: Range {min: 0.1, max: 0.3}, lightnessRange: Range {min: 0.95, max: 1.0} }
+      , SequentialGenerator { hueShift, darknessRange: Range {min: 0.2, max: 0.5}, lightnessRange: Range {min: 0.95, max: 1.0} }
       ]
     secondaryHueShift <- [-135.0, -90.0, 90.0, 135.0, 180.0]
     pure $ DivergingGenerator
@@ -241,13 +265,16 @@ runSequentialGenerator n seed (SequentialGenerator spec) =
 runDivergingGenerator :: Int -> Color -> DivergingGenerator -> Array Color
 runDivergingGenerator n seed (DivergingGenerator spec) = (mkRunner scale) seed n
   where
+  { sequentialGenerator: SequentialGenerator sequentialGenerator
+  , startColorHueShift
+  } = spec
   scale = \color ->
     let
       hsl = Color.toHSLA color
       start = Scale.reverseStops
-        $ mkSequentialPalette spec.sequentialGenerator
-        $ Color.hsla (spec.startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
-      end = mkSequentialPalette spec.sequentialGenerator color
+        $ mkSequentialPalette sequentialGenerator
+        $ Color.hsla (startColorHueShift + hsl.h) hsl.s hsl.l hsl.a
+      end = mkSequentialPalette sequentialGenerator color
     in start `Scale.combineStops 0.5` end
 
 sequentialToCSSGradient ::  Color -> SequentialGenerator -> CSS.BackgroundImage
@@ -271,8 +298,12 @@ mkSequentialPalette
   :: SequentialGeneratorSpec
   -> Color
   -> Scale.ColorStops
-mkSequentialPalette {hueShift, lightnessRange, darknessRange} inputColor = Scale.ColorStops startColor stops endColor
+mkSequentialPalette palette inputColor = Scale.ColorStops startColor stops endColor
   where
+  { hueShift
+  , lightnessRange: Range lightnessRange
+  , darknessRange: Range darknessRange
+  } = palette
   input = Color.toHSLA inputColor
   endColor = Color.hsla
     input.h

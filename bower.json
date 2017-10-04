@@ -21,6 +21,7 @@
   ],
   "dependencies": {
     "purescript-colors": "git://github.com/safareli/purescript-colors#utils",
+    "purescript-generics-rep": "^5.2.0",
     "purescript-halogen": "^2.0.1",
     "purescript-halogen-css": "^6.0.0",
     "purescript-css": "^3.0.0",
