@@ -25,7 +25,6 @@ import CSS as CSS
 import Color (Color)
 import Color as Color
 import Color.Scale as Scale
-import ColorPalettePicker.Utils.Easing (linear, quadratic)
 import Data.Array (fromFoldable, intercalate, reverse, sortBy, take)
 import Data.Foldable (foldr)
 import Data.Generic.Rep (class Generic)
@@ -36,7 +35,7 @@ import Data.List.NonEmpty as NEL
 import Data.List.Types (NonEmptyList)
 import Data.Maybe (fromJust)
 import Data.Newtype (class Newtype)
-import Math (abs, sqrt, (%))
+import Math (abs, pow, sqrt, (%))
 import Partial.Unsafe (unsafePartial)
 
 newtype SequentialGenerator = SequentialGenerator SequentialGeneratorSpec
@@ -320,3 +319,14 @@ mkSequentialPalette palette inputColor = Scale.ColorStops startColor stops endCo
   startColor = Color.hsla start.h start.s start.l start.a
   absHueShift = (abs hueShift % 180.0)
   stops = Nil
+
+type Easing = Number -> Number -> Number -> Number
+
+polynomial :: Number -> Easing
+polynomial power start end progress = (pow progress power) * (end - start) + start
+
+linear :: Easing
+linear = polynomial 1.0
+
+quadratic :: Easing
+quadratic = polynomial 2.0
