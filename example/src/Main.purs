@@ -1,7 +1,6 @@
 module Main where
 
 import Prelude
-import Debug.Trace (traceAnyA)
 
 import Color.Scheme.X11 (blue)
 import ColorPalettePicker.Halogen.Component as CPP
@@ -61,5 +60,4 @@ render _ = HH.div_
     ]
 eval ∷ ∀ m. Query ~> DSL m
 eval (Query msg next) = do
-  traceAnyA msg
   pure next

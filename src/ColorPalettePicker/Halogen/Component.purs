@@ -286,9 +286,9 @@ eval = case _ of
     pure next
   PickerEvents msg next → do
     let
-      seed = case msg of
-        CPicker.NextChange seed → seed
-        CPicker.NotifyChange seed → seed
-    H.modify _{seed = seed}
-    H.raise $ NewSeed seed
+      s = case msg of
+        CPicker.NextChange ns → ns
+        CPicker.NotifyChange nc → nc
+    H.modify _{ seed = s }
+    H.raise $ NewSeed s
     pure next
